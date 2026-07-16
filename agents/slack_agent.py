@@ -32,6 +32,7 @@ SLACK_ENV_VARS = [
     # Cache configuration
     "SLACK_MCP_USERS_CACHE",  # Path to users cache file
     "SLACK_MCP_CHANNELS_CACHE",  # Path to channels cache
+    "SLACK_MCP_NO_CACHE",  # Disable user/channel caching on startup (true/false)
     # Logging
     "SLACK_MCP_LOG_LEVEL",  # debug, info, warn, error
 ]
@@ -93,10 +94,14 @@ def _create_stdio_agent(required_vars: list[str]) -> BaseAgent:
                 if value:
                     env[var] = value
             
+            args = ["-y", "slack-mcp-server@latest", "--transport", "stdio"]
+            if os.getenv("SLACK_MCP_NO_CACHE") == "true":
+                args.append("--no-cache")
+            
             # Use npx with -y flag to auto-confirm install
             return self.build_stdio_config(
                 "npx",
-                ["-y", "slack-mcp-server@latest", "--transport", "stdio"],
+                args,
                 env
             )
     

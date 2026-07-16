@@ -13,6 +13,31 @@ from .utils import (
 )
 
 
+def _is_missing_env_value(value: str | None) -> bool:
+    if value is None:
+        return True
+
+    normalized = value.strip()
+    if not normalized:
+        return True
+
+    lower_value = normalized.lower()
+    placeholder_markers = (
+        "your_",
+        "changeme",
+        "replace_me",
+        "example",
+        "placeholder",
+        "api_id_here",
+        "api_hash_here",
+        "token_here",
+        "your_api_id_here",
+        "your_api_hash_here",
+        "your_token_here",
+    )
+    return any(marker in lower_value for marker in placeholder_markers)
+
+
 __all__ = [
     "BaseAgent",
     "initialize_agent",
@@ -23,13 +48,13 @@ __all__ = [
 
 def _get_llm_provider():
     from llm_providers import gemini
-    from llm_providers import lightning_llm
     from llm_providers import groq_llm
+    from llm_providers import openai
 
-    provider = os.getenv("LLM_PROVIDER", "gemini").lower()
+    provider = os.getenv("LLM_PROVIDER", "openai").lower()
 
-    if provider == "lightning":
-        return lightning_llm.get_llm
+    if provider == "openai":
+        return openai.get_llm
     elif provider == "groq":
         return groq_llm.get_llm
     elif provider == "gemini":
@@ -37,7 +62,7 @@ def _get_llm_provider():
     else:
         raise ValueError(
             f"Unsupported LLM_PROVIDER: {provider}. "
-            f"Supported values: 'lightning', 'groq', 'gemini'"
+            f"Supported values: 'openai', 'groq', 'gemini'"
         )
 
 
@@ -109,13 +134,15 @@ class BaseAgent:
         """Validate required environment variables."""
         missing_vars: list[str] = []
         for var in self.required_env_vars:
-            if not os.getenv(var):
+            if _is_missing_env_value(os.getenv(var)):
                 missing_vars.append(var)
-        
+
         if missing_vars:
             missing_str = ", ".join(sorted(set(missing_vars)))
             raise ValueError(
-                "Missing required environment variables: " + missing_str
+                "Missing required environment variables: "
+                + missing_str
+                + ". Add them to your .env file or export them in your shell."
             )
 
     def get_connection_config(self) -> dict[str, Any]:
