@@ -52,12 +52,12 @@ class ActiveAgent:
             # Apply parameters to environment variables for LangChain loading
             os.environ["LLM_PROVIDER"] = provider
             os.environ["MODEL"] = model
-            if provider == "gemini":
-                os.environ["GOOGLE_API_KEY"] = api_key
-            elif provider == "openai":
-                os.environ["OPENAI_API_KEY"] = api_key
-            elif provider == "groq":
-                os.environ["GROQ_API_KEY"] = api_key
+            if provider == "gemini" and api_key and api_key.strip():
+                os.environ["GOOGLE_API_KEY"] = api_key.strip()
+            elif provider == "openai" and api_key and api_key.strip():
+                os.environ["OPENAI_API_KEY"] = api_key.strip()
+            elif provider == "groq" and api_key and api_key.strip():
+                os.environ["GROQ_API_KEY"] = api_key.strip()
 
             # Now run agent initialization
             await ensure_agent_initialized(self.state, self.agent)
