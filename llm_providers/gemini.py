@@ -11,7 +11,7 @@ def get_llm() -> BaseChatModel:
             "Missing required environment variable: GOOGLE_API_KEY"
         )
 
-    model_id = os.getenv("MODEL", "models/gemini-3.1-flash-lite").strip()
+    model_id = (os.getenv("GEMINI_MODEL") or os.getenv("MODEL") or "models/gemini-3.1-flash-lite").strip()
     if not model_id:
         raise ValueError("Model ID cannot be empty.")
 

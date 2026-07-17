@@ -1,5 +1,7 @@
 import os
+from typing import Any
 from lib.base_agent import BaseAgent
+from lib.base_transport import StdioTransportMixin
 
 __all__ = ["get_github_agent"]
 
@@ -15,10 +17,35 @@ def get_github_agent() -> BaseAgent:
     else:
         required_vars = []
 
-    # Use the public GitHub MCP endpoint only when a bearer token is present.
-    # Personal access tokens require an explicit MCP server URL.
-    default_server_url = "https://api.githubcopilot.com/mcp/"
+    transport = os.getenv("GITHUB_MCP_TRANSPORT", "streamable_http").lower()
 
+    if transport == "stdio":
+        return _create_stdio_agent(required_vars)
+    else:
+        return _create_http_agent(required_vars)
+
+
+def _create_stdio_agent(required_vars: list[str]) -> BaseAgent:
+    class GithubStdioAgent(BaseAgent, StdioTransportMixin):
+        def get_connection_config(self) -> dict[str, Any]:
+            env = {
+                "PATH": os.environ.get("PATH", ""),
+                "GITHUB_PERSONAL_ACCESS_TOKEN": os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN", ""),
+            }
+            return self.build_stdio_config(
+                "npx",
+                ["-y", "@modelcontextprotocol/server-github"],
+                env,
+            )
+
+    return GithubStdioAgent(
+        service_name="github",
+        required_env_vars=required_vars,
+    )
+
+
+def _create_http_agent(required_vars: list[str]) -> BaseAgent:
+    default_server_url = "https://api.githubcopilot.com/mcp/"
     return BaseAgent(
         service_name="github",
         required_env_vars=required_vars,

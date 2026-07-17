@@ -25,4 +25,6 @@ dependencies = [
     "typer",
     "langchain-groq",
     "langchain-openai>=1.1.0",
+    "fastapi>=0.139.1",
+    "uvicorn>=0.51.0",
 ]
