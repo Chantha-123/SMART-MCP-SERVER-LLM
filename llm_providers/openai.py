@@ -13,7 +13,7 @@ def get_llm() -> BaseChatModel:
             "Missing required environment variable: OPENAI_API_KEY"
         )
 
-    model_id = os.getenv("MODEL", "gpt-4o-mini").strip()
+    model_id = (os.getenv("OPENAI_MODEL") or os.getenv("MODEL") or "gpt-4o-mini").strip()
     if not model_id:
         raise ValueError("Model ID cannot be empty.")
 

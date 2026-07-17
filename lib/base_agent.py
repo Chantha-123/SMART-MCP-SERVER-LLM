@@ -1,6 +1,8 @@
 import os
 from typing import Any, cast
 
+from pydantic import PrivateAttr
+from langchain_core.tools import BaseTool
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.prebuilt import create_react_agent
@@ -101,6 +103,61 @@ def _sanitize_tool_schemas(tools: list[Any]) -> None:
                     )
 
 
+def get_schema_enum(prop_schema: Any) -> list[Any] | None:
+    if not isinstance(prop_schema, dict):
+        return None
+    if "enum" in prop_schema:
+        return prop_schema["enum"]
+    for combiner in ("anyOf", "oneOf"):
+        if combiner in prop_schema and isinstance(prop_schema[combiner], list):
+            for sub_schema in prop_schema[combiner]:
+                if isinstance(sub_schema, dict) and "enum" in sub_schema:
+                    return sub_schema["enum"]
+    return None
+
+
+def sanitize_args(args: dict[str, Any], schema: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(schema, dict) or "properties" not in schema:
+        return args
+    properties = schema["properties"]
+    sanitized_args = {}
+    for key, value in args.items():
+        if key not in properties:
+            sanitized_args[key] = value
+            continue
+        prop_schema = properties[key]
+        allowed_values = get_schema_enum(prop_schema)
+        if allowed_values is not None:
+            if value not in allowed_values:
+                # Omit parameter to fall back to the default behavior
+                continue
+        sanitized_args[key] = value
+    return sanitized_args
+
+
+class SanitizedTool(BaseTool):
+    _original_tool: BaseTool = PrivateAttr()
+    _schema_dict: dict[str, Any] = PrivateAttr()
+
+    def __init__(self, original_tool: BaseTool, schema_dict: dict[str, Any], **kwargs: Any):
+        super().__init__(
+            name=original_tool.name,
+            description=original_tool.description,
+            args_schema=original_tool.args_schema,
+            **kwargs
+        )
+        self._original_tool = original_tool
+        self._schema_dict = schema_dict
+
+    def _run(self, *args: Any, **kwargs: Any) -> Any:
+        sanitized_kwargs = sanitize_args(kwargs, self._schema_dict)
+        return self._original_tool.invoke(sanitized_kwargs)
+
+    async def _arun(self, *args: Any, **kwargs: Any) -> Any:
+        sanitized_kwargs = sanitize_args(kwargs, self._schema_dict)
+        return await self._original_tool.ainvoke(sanitized_kwargs)
+
+
 class BaseAgent:
     """Base class for MCP agents providing common functionality."""
 
@@ -169,11 +226,34 @@ class BaseAgent:
         # Get tools from MCP client
         tools = await client.get_tools()
         _sanitize_tool_schemas(tools)
+
+        # Filter tools based on enabled list to support low token-limit providers (like Groq free tier)
+        enabled_str = os.getenv(f"{self.service_name.upper()}_ENABLED_TOOLS") or os.getenv("ENABLED_TOOLS")
+        if not enabled_str and os.getenv("LLM_PROVIDER") == "groq":
+            default_groq_tools = {
+                "github": "search_code,get_issue,search_repositories",
+                "slack": "conversations_history,conversations_add_message",
+                "telegram": "tg_dialogs,tg_send",
+                "jira": "jira_search,jira_get_issue",
+                "google-chat": "list_spaces,send_message"
+            }
+            enabled_str = default_groq_tools.get(self.service_name)
+
+        if enabled_str:
+            enabled_names = {name.strip().lower() for name in enabled_str.split(",") if name.strip()}
+            filtered_tools = []
+            for tool in tools:
+                original_name = tool.name
+                sanitized_name = sanitize_tool_name(original_name)
+                if (original_name.lower() in enabled_names) or (sanitized_name.lower() in enabled_names):
+                    filtered_tools.append(tool)
+            tools = filtered_tools
         
         state.tool_summaries = []
         state.tool_map = {}
         state.tool_details = {}
         
+        wrapped_tools = []
         for tool in tools:
             original_name = tool.name
             sanitized_name = sanitize_tool_name(original_name)
@@ -181,7 +261,11 @@ class BaseAgent:
             args_schema = schema_from_model(getattr(tool, "args_schema", None))
             metadata = getattr(tool, "metadata", {}) or {}
             
-            state.tool_map[sanitized_name] = tool
+            # Wrap the tool in SanitizedTool to handle model parameter hallucinations (like sort enums on Groq)
+            wrapped_tool = SanitizedTool(tool, args_schema or {})
+            wrapped_tools.append(wrapped_tool)
+            
+            state.tool_map[sanitized_name] = wrapped_tool
             state.tool_details[sanitized_name] = {
                 "name": sanitized_name,
                 "original_name": original_name,
@@ -196,6 +280,7 @@ class BaseAgent:
                     "description": getattr(tool, "description", ""),
                 }
             )
+        tools = wrapped_tools
         
         # Get LLM and create agent with tools
         get_llm = _get_llm_provider()

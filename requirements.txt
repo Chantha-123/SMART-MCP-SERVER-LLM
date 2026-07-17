@@ -28,3 +28,8 @@ typer
 
 # Groq
 langchain-groq
+
+# Web Dashboard
+fastapi
+uvicorn
+

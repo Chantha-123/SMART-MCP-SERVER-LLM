@@ -13,7 +13,7 @@ def get_llm() -> BaseChatModel:
             "Missing required environment variable: GROQ_API_KEY"
         )
 
-    model_id = os.getenv("MODEL", "llama-3.1-8b-instant").strip()
+    model_id = (os.getenv("GROQ_MODEL") or os.getenv("MODEL") or "llama-3.1-8b-instant").strip()
     if not model_id:
         raise ValueError("Model ID cannot be empty.")
 
