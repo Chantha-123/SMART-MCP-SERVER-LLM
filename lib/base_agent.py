@@ -3,7 +3,7 @@ from typing import Any, cast
 
 from pydantic import PrivateAttr
 from langchain_core.tools import BaseTool
-from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.prebuilt import create_react_agent
 
@@ -158,6 +158,68 @@ class SanitizedTool(BaseTool):
         return await self._original_tool.ainvoke(sanitized_kwargs)
 
 
+def _matches_tool_name(tool_name: str, enabled_names: set[str]) -> bool:
+    low = tool_name.lower()
+    san = sanitize_tool_name(low)
+    if low in enabled_names or san in enabled_names:
+        return True
+
+    # Strip common prefixes (e.g. git_, github_, jira_, slack_, tg_, telegram_, google_chat_, gchat_)
+    stripped = low
+    for prefix in ("git_", "github_", "jira_", "slack_", "tg_", "telegram_", "google_chat_", "gchat_"):
+        if stripped.startswith(prefix):
+            stripped = stripped[len(prefix):]
+            break
+    if stripped in enabled_names:
+        return True
+
+    for en in enabled_names:
+        if en in low or en in san or low in en or san in en:
+            return True
+    return False
+
+
+def sanitize_session_history(
+    session_history: list[BaseMessage],
+    valid_tool_names: set[str],
+) -> list[BaseMessage]:
+    """Sanitize session history by removing or converting tool calls and tool messages
+    that reference tools not in valid_tool_names (preventing Groq/OpenAI validation errors).
+    """
+    sanitized: list[BaseMessage] = []
+
+    for msg in session_history:
+        if isinstance(msg, AIMessage):
+            raw_tool_calls = getattr(msg, "tool_calls", None)
+            if raw_tool_calls:
+                valid_calls = []
+                for call in raw_tool_calls:
+                    call_name = call.get("name") if isinstance(call, dict) else getattr(call, "name", None)
+                    if call_name and call_name in valid_tool_names:
+                        valid_calls.append(call)
+
+                if len(valid_calls) != len(raw_tool_calls):
+                    content = msg.content if isinstance(msg.content, str) else str(msg.content or "")
+                    if not content and not valid_calls:
+                        content = "[Previous tool call to unlisted tool was omitted]"
+                    sanitized.append(AIMessage(content=content, tool_calls=valid_calls))
+                else:
+                    sanitized.append(msg)
+            else:
+                sanitized.append(msg)
+        elif isinstance(msg, ToolMessage):
+            tool_name = getattr(msg, "name", None)
+            if tool_name and tool_name not in valid_tool_names:
+                text = f"[Result for unlisted tool {tool_name}]: {msg.content}"
+                sanitized.append(HumanMessage(content=text))
+            else:
+                sanitized.append(msg)
+        else:
+            sanitized.append(msg)
+
+    return sanitized
+
+
 class BaseAgent:
     """Base class for MCP agents providing common functionality."""
 
@@ -231,7 +293,7 @@ class BaseAgent:
         enabled_str = os.getenv(f"{self.service_name.upper()}_ENABLED_TOOLS") or os.getenv("ENABLED_TOOLS")
         if not enabled_str and os.getenv("LLM_PROVIDER") == "groq":
             default_groq_tools = {
-                "github": "search_code,get_issue,search_repositories",
+                "github": "git_search_code,search_code,git_get_issue,get_issue,git_search_repositories,search_repositories",
                 "slack": "conversations_history,conversations_add_message",
                 "telegram": "tg_dialogs,tg_send",
                 "jira": "jira_search,jira_get_issue",
@@ -244,10 +306,10 @@ class BaseAgent:
             filtered_tools = []
             for tool in tools:
                 original_name = tool.name
-                sanitized_name = sanitize_tool_name(original_name)
-                if (original_name.lower() in enabled_names) or (sanitized_name.lower() in enabled_names):
+                if _matches_tool_name(original_name, enabled_names):
                     filtered_tools.append(tool)
-            tools = filtered_tools
+            if filtered_tools:
+                tools = filtered_tools
         
         state.tool_summaries = []
         state.tool_map = {}
@@ -286,8 +348,17 @@ class BaseAgent:
         get_llm = _get_llm_provider()
         llm = get_llm()
         
-        # Create React agent with model and tools
-        state.agent_executor = create_react_agent(llm, tools)
+        valid_tool_names = list(state.tool_map.keys())
+        tool_names_str = ", ".join(valid_tool_names) if valid_tool_names else "None"
+        system_prompt = (
+            f"You are a helpful assistant with access to the following tools: {tool_names_str}.\n"
+            "CRITICAL TOOL INSTRUCTION: You MUST ONLY call tools explicitly listed in the available tools above. "
+            "Never attempt to call or invent any unlisted tools (such as brave_search, web_search, python, etc.). "
+            "If none of the available tools fit the request, answer directly in plain text without making any tool calls."
+        )
+
+        # Create React agent with model, tools, and system prompt
+        state.agent_executor = create_react_agent(llm, tools, prompt=system_prompt)
 
 
 async def initialize_agent(
@@ -319,8 +390,16 @@ async def stream_agent_response(
     
     executor = cast(Any, state.agent_executor)
     
+    valid_tool_names = set(state.tool_map.keys())
+    if hasattr(state, "tool_details"):
+        for details in state.tool_details.values():
+            if "original_name" in details:
+                valid_tool_names.add(details["original_name"])
+
+    sanitized_history = sanitize_session_history(session_history, valid_tool_names)
+
     # Use ainvoke for async execution with the agent
-    result = await executor.ainvoke({"messages": session_history})
+    result = await executor.ainvoke({"messages": sanitized_history})
     
     # Extract the last AI message from the result
     messages = result.get("messages", [])
@@ -334,3 +413,4 @@ async def stream_agent_response(
     if last_ai_message is None:
         raise RuntimeError("The agent did not return a response.")
     return last_ai_message
+

@@ -143,7 +143,11 @@ async def chat_endpoint(req: ChatRequest):
         return ChatResponse(response=text_response, session_id=req.session_id)
     except Exception as e:
         agent_wrapper.state.pop_last_message(req.session_id)
-        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
+        err_msg = str(e)
+        if "tool call validation failed" in err_msg or "was not in request.tools" in err_msg:
+            fallback_response = f"Provider Error: The LLM model attempted to call a tool that is not in the allowed tools list for {req.agent_name}. Please check available tools or retry."
+            return ChatResponse(response=fallback_response, session_id=req.session_id)
+        raise HTTPException(status_code=500, detail=f"Agent error: {err_msg}")
 
 @app.get("/api/sessions/{agent_name}")
 async def list_agent_sessions(agent_name: str):
