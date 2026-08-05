@@ -1,6 +1,11 @@
 import os
 import asyncio
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+
+# Load environment variables from .env if present
+load_dotenv()
+
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Dict, Any, List
