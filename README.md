@@ -1,196 +1,250 @@
-# Community AI MCP Agent
+# Community AI MCP Agent & Dashboard
 
-A unified Python CLI for interacting with GitHub, Slack, and Jira using the Model Context Protocol (MCP) and LangChain.
+A unified AI Agent platform with a Web Dashboard and CLI for interacting with GitHub, Slack, Jira, Telegram, Google Chat, and Web Scraping using the Model Context Protocol (MCP) and LangChain/LangGraph. Supports Gemini, Groq, OpenAI, and local Ollama.
 
-## Features
+---
 
-- **GitHub Agent**: Repository management, issues, PRs, and code operations
-- **Slack Agent**: Channel management, messaging, and workspace interactions  
-- **Jira Agent**: Issue tracking, project management, and workflow automation
-- **Multi-LLM Support**: Works with Gemini, Groq, OpenAI, and Lightning AI
-- **Extensible Architecture**: Built on LangChain and LangGraph for easy customization
+## 🌟 Features
 
-## Quick Start
+- **GitHub Agent**: Repository management, issues, PRs, and code operations.
+- **Slack Agent**: Channel management, messaging, and workspace interactions.
+- **Jira Agent**: Issue tracking, project management, and workflow automation.
+- **Telegram & Google Chat Agents**: Community chat integrations.
+- **Web Reader Agent**: Web page scraping and URL reading.
+- **Multi-LLM Support**: Works with Gemini, Groq, OpenAI, and local Ollama models.
+- **Web Dashboard & CLI**: Full interactive browser UI and terminal CLI interface.
 
-### 1. Installation
+---
+
+## 🚀 Setup from Scratch
+
+### Prerequisites
+- **Python**: 3.12 or higher
+- **Node.js**: 20+ (required for npm-based MCP servers like Slack and Jira)
+- **Docker & Docker Compose** (Optional, for containerized deployment)
+
+### 1. Clone & Install Dependencies
 
 ```bash
-# Clone the repository
-cd community_chatbot/mcp_impl
+# Clone the repository and enter directory
+cd community_mcp_servers
 
 # Install Python dependencies (using uv or pip)
 uv sync
-# or
+# OR
 pip install -r requirements.txt
 
-# Install Node.js dependencies for Slack agent (requires Node.js)
+# Install Node.js dependencies for agent tools
 cd agents
 npm install
 cd ..
 ```
 
-### 2. Configuration
+### 2. Configure Credentials (`.env`)
 
-Copy the example environment file and configure your credentials:
+Copy the template environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-**Minimum required configuration:**
+Open `.env` and fill in your desired provider and agent credentials:
 
 ```env
-# Choose your LLM provider
+# Choose default LLM Provider: gemini | groq | openai | ollama
 LLM_PROVIDER=gemini
-GOOGLE_API_KEY=your_key_here
+GOOGLE_API_KEY=your_gemini_api_key_here
 
-# Enable agents as needed
-GITHUB_PERSONAL_ACCESS_TOKEN=your_token_here
-SLACK_MCP_XOXP_TOKEN=xoxp-your-token-here
+# Agent Credentials
+GITHUB_PERSONAL_ACCESS_TOKEN=your_github_token_here
+SLACK_MCP_XOXP_TOKEN=xoxp-your-slack-token-here
 JIRA_URL=https://your-company.atlassian.net
 JIRA_USERNAME=your.email@company.com
-JIRA_API_TOKEN=your_token_here
+JIRA_API_TOKEN=your_jira_token_here
 ```
 
-### 3. Usage
+---
+
+## 🚦 How to Start, Stop, and Restart
+
+### Option 1: Native Python Web Server (Fastest for Development)
+
+- **START**:
+  ```bash
+  python3 web_server.py
+  ```
+  Open browser at: `http://localhost:8000`
+
+- **STOP**: Press `Ctrl + C` in your terminal.
+
+- **RESTART**: Press `Ctrl + C`, then run:
+  ```bash
+  python3 web_server.py
+  ```
+
+---
+
+### Option 2: Docker Compose (Containerized Setup)
+
+- **START BOTH (Web Dashboard + Ollama)**:
+  ```bash
+  docker compose up -d --build
+  ```
+  - MCP Web Dashboard: `http://localhost:8000`
+  - Ollama Service: `http://localhost:11434`
+
+- **START ONLY OLLAMA**:
+  ```bash
+  docker compose up -d ollama
+  ```
+
+- **START ONLY WEB DASHBOARD**:
+  ```bash
+  docker compose up -d web
+  ```
+
+- **CHECK STATUS & LOGS**:
+  ```bash
+  # Check running containers
+  docker compose ps
+
+  # View web server logs
+  docker compose logs -f web
+
+  # View Ollama logs
+  docker compose logs -f ollama
+  ```
+
+- **STOP SPECIFIC SERVICE / ALL**:
+  ```bash
+  # Stop only Ollama container
+  docker compose stop ollama
+
+  # Stop only Web container
+  docker compose stop web
+
+  # Stop ALL containers
+  docker compose down
+  ```
+
+- **RESTART**:
+  ```bash
+  # Quick restart without rebuild
+  docker compose restart
+
+  # Restart specific service (e.g. web or ollama)
+  docker compose restart web
+  docker compose restart ollama
+
+  # Full restart with clean rebuild
+  docker compose up -d --build --force-recreate
+  ```
+
+---
+
+### Option 3: macOS GPU Acceleration + Local Ollama (Recommended for Mac)
+
+Docker on macOS cannot directly access Apple Silicon GPU hardware (Metal). For maximum inference speed with local Ollama:
+
+1. **Install & Run Ollama natively on macOS**:
+   Download from [ollama.com](https://ollama.com) and run in terminal:
+   ```bash
+   ollama pull llama3.1
+   ```
+2. **Start Web Dashboard container**:
+   ```bash
+   docker compose up -d web
+   ```
+3. **Connect Web Dashboard to macOS Ollama**:
+   - Open `http://localhost:8000`
+   - Select **Ollama** as provider
+   - Set **Ollama URL** to `http://host.docker.internal:11434`
+
+---
+
+## 💻 CLI Usage
+
+You can also run agents directly in your command line:
 
 ```bash
-# Run the GitHub agent
-python main.py github
+# Run GitHub Agent CLI
+python3 main.py github
 
-# Run the Slack agent
-python main.py slack
+# Run Slack Agent CLI
+python3 main.py slack
 
-# Run the Jira agent
-python main.py jira
+# Run Jira Agent CLI
+python3 main.py jira
 
-# Get help for any agent
-python main.py github --help
+# View help for any agent
+python3 main.py github --help
 ```
 
-## Agent Details
+---
 
-### GitHub Agent
+## 🤗 How to Deploy to Hugging Face Spaces
 
-Interact with GitHub repositories using your personal access token.
+### Step 1: Update Port in `Dockerfile`
+Hugging Face Spaces expects web traffic on port **7860**. Ensure your `Dockerfile` has:
 
-**Required:**
+```dockerfile
+EXPOSE 7860
+ENV PORT=7860
 
-- `GITHUB_PERSONAL_ACCESS_TOKEN` - [Create here](https://github.com/settings/tokens)
+CMD ["sh", "-c", "uvicorn web_server:app --host 0.0.0.0 --port ${PORT:-7860}"]
+```
 
-**Capabilities:**
+### Step 2: Push Code to Hugging Face Space
+1. Create a **Docker Space** (Blank template) at [huggingface.co/new-space](https://huggingface.co/new-space).
+2. Add your HF remote and push:
+   ```bash
+   git remote add hf https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME
+   git push hf main
+   ```
+3. In Hugging Face Space **Settings** $\rightarrow$ **Variables and secrets**, add your API keys (`GOOGLE_API_KEY`, etc.).
 
-- Repository operations (create, clone, search)
-- Issue and PR management
-- Code search and file operations
-- Workflow automation
+### Step 3: Connect Hugging Face Space to Local Mac Ollama (100% Free Tokens)
+If you host your web app on Hugging Face but want your local Mac GPU to handle LLM processing for free:
+1. Allow remote origins on Mac: `launchctl setenv OLLAMA_ORIGINS "*"`
+2. Start an HTTP tunnel using Ngrok: `ngrok http 11434`
+3. Enter your Ngrok URL (`https://xxxx-xx-xx-xx.ngrok-free.app`) into the **Ollama URL** input on your Hugging Face website.
 
-### Slack Agent
+---
 
-Connect to Slack workspaces and manage communications.
-
-**Required:**
-
-- `SLACK_MCP_XOXP_TOKEN` - [Create Slack app](https://api.slack.com/apps)
-
-**Capabilities:**
-
-- Channel and user management
-- Message posting and retrieval
-- Workspace information
-
-**Optional:** Enable message posting with `SLACK_MCP_ADD_MESSAGE_TOOL=true`
-
-### Jira Agent
-
-Manage Jira projects and issues programmatically.
-
-**Required:**
-
-- `JIRA_URL` - Your Jira instance URL
-- `JIRA_USERNAME` - Your email
-- `JIRA_API_TOKEN` - [Create here](https://id.atlassian.com/manage-profile/security/api-tokens)
-
-**Capabilities:**
-
-- Issue CRUD operations
-- Project and sprint management
-- Advanced JQL searches
-- Custom field handling
-
-## Implementation Details
-
-- **MCP integration:** Agents use an internal MCP-based client flow implemented in [community_chatbot/mcp_impl/lib/base_agent.py](community_chatbot/mcp_impl/lib/base_agent.py). The CLI shell for each agent is created with the helper in [community_chatbot/mcp_impl/lib/base_mcp.py](community_chatbot/mcp_impl/lib/base_mcp.py) which exposes commands like `list-tools`, `chat`, `invoke-tool`, and `health`.
-
-- **MCP client used:** The code constructs a `MultiServerMCPClient` (from the `langchain_mcp_adapters` package) inside `BaseAgent.initialize()` to discover and load remote MCP tools. Tools discovered from the MCP endpoints are converted into LangGraph/LangChain-compatible tool definitions and used to create a React-style agent via `langgraph.prebuilt.create_react_agent`.
-
-- **Transport options:** Agents support multiple transport modes:
- 	- `stdio` — runs a local process (usually an `npx` package or a Docker image) and communicates over stdio. Examples:
-  		- Slack: runs `npx slack-mcp-server --transport stdio` (see [community_chatbot/mcp_impl/agents/slack_agent.py](community_chatbot/mcp_impl/agents/slack_agent.py)).
-  		- Jira: can run `ghcr.io/sooperset/mcp-atlassian:latest` (Docker) or `npx mcp-atlassian@latest` (see [community_chatbot/mcp_impl/agents/jira_agent.py](community_chatbot/mcp_impl/agents/jira_agent.py)).
- 	- `sse` / `streamable_http` — connects to an HTTP/SSE MCP server endpoint. Default example endpoints used by the code:
-  		- Slack HTTP default: `http://127.0.0.1:13080/sse`
-  		- Jira HTTP default: `http://127.0.0.1:8080/sse`
-  The HTTP transport builder is implemented in [community_chatbot/mcp_impl/lib/base_transport.py](community_chatbot/mcp_impl/lib/base_transport.py).
-
-- **LLM & agent creation:** The LLM provider is chosen by `LLM_PROVIDER` (see [community_chatbot/mcp_impl/lib/base_agent.py](community_chatbot/mcp_impl/lib/base_agent.py)) and the repository includes provider adapters in [community_chatbot/mcp_impl/llm_providers/](community_chatbot/mcp_impl/llm_providers/) (Gemini, Groq, Lightning). The selected LLM is passed into `create_react_agent` alongside the loaded MCP tools to form the agent executor.
-
-### GitHub Agent
-
-- `https://github.com/github/github-mcp-server` — GitHub MCP server repository.
-- `https://api.githubcopilot.com/mcp/` — default GitHub MCP endpoint used as the service URL in `agents/github_agent.py`.
-- `langchain_mcp_adapters` — MCP client package used via `MultiServerMCPClient` (see `lib/base_agent.py`).
-- `langgraph` / `langchain` — used to create the React-style agent (`langgraph.prebuilt.create_react_agent`).
-
-### Slack Agent
-
-- `https://github.com/korotovsky/slack-mcp-server` — Slack MCP server repository.
-- `npx slack-mcp-server` — npm package invoked in `agents/slack_agent.py` when using the `stdio` transport (runs `slack-mcp-server --transport stdio`).
-- `SLACK_*` environment variables (tokens) map to Slack credentials and standard Slack developer docs: <https://api.slack.com/>
-- Default local HTTP/SSE endpoint in code: `http://127.0.0.1:13080/sse` (used when `SLACK_MCP_TRANSPORT` is set to `sse`/`streamable_http`).
-
-### Jira Agent
-
-- `https://github.com/sooperset/mcp-atlassian` — Jira MCP server repository.
-- `ghcr.io/sooperset/mcp-atlassian:latest` — Docker image referenced in `agents/jira_agent.py` for the `stdio` Docker transport.
-- `npx mcp-atlassian@latest` — npm package fallback for `stdio` (non-Docker) mode.
-- Jira developer docs and API token creation: <https://id.atlassian.com/manage-profile/security/api-tokens>
-- Default local HTTP/SSE endpoint in code: `http://127.0.0.1:8080/sse` (used when `JIRA_MCP_TRANSPORT` is `sse`/`streamable_http`).
-
-## Project Structure
+## 🛠️ Project Structure
 
 ```
-mcp_impl/
-├── agents/              # Agent implementations
+community_mcp_servers/
+├── agents/              # Agent implementations (GitHub, Jira, Slack, etc.)
 │   ├── github_agent.py
 │   ├── jira_agent.py
-│   └── slack_agent.py
-├── lib/                 # Core library
-│   ├── base_agent.py   # Base agent class
-│   ├── base_mcp.py     # MCP integration
-│   └── utils.py        # Utilities
-├── llm_providers/      # LLM provider implementations
+│   ├── slack_agent.py
+│   ├── telegram_agent.py
+│   └── web_agent.py
+├── lib/                 # Core MCP library & transports
+│   ├── base_agent.py   # Base agent executor
+│   ├── base_mcp.py     # MCP tool integration
+│   └── base_transport.py
+├── llm_providers/      # LLM provider adapters
 │   ├── gemini.py
 │   ├── groq_llm.py
-│   ├── lightning_llm.py
-│   └── __init__.py
+│   ├── openai.py
+│   └── ollama.py
+├── web/                 # Dashboard UI frontend (index.html)
+├── web_server.py        # FastAPI server backend
 ├── main.py             # CLI entry point
-├── .env.example        # Configuration template
+├── Dockerfile           # Production Docker build file
+├── docker-compose.yml   # Multi-container setup (Web + Ollama)
+├── .env.example        # Environment template
 └── requirements.txt    # Python dependencies
 ```
 
-## Requirements
+---
 
-- Python >= 3.12
-- Valid API keys for your chosen LLM provider
-- Agent-specific credentials (GitHub token, Slack token, Jira credentials)
+## 🔑 Key API Links
 
-## Getting API Keys
-
-- **GitHub**: [Settings → Developer settings → Personal access tokens](https://github.com/settings/tokens)
-- **Slack**: [Create a Slack app](https://api.slack.com/apps) → Install to workspace → Copy OAuth token
-- **Jira**: [Account security → API tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
+- **GitHub**: [Personal Access Tokens](https://github.com/settings/tokens)
+- **Slack**: [Slack App Management](https://api.slack.com/apps)
+- **Jira**: [Atlassian API Tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
 - **Gemini**: [Google AI Studio](https://aistudio.google.com/app/apikey)
 - **Groq**: [Groq Console](https://console.groq.com/keys)
-- **OpenAI**: [OpenAI API Keys](https://platform.openai.com/api-keys)
-# SMART-MCP-SERVER-LLM

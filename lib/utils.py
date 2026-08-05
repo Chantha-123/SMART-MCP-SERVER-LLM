@@ -149,12 +149,17 @@ def build_connection_config(
 def schema_from_model(model: Any) -> dict[str, Any] | None:
     if model is None:
         return None
+    if isinstance(model, dict):
+        return model
     for attr in ("model_json_schema", "schema"):
         schema_fn = getattr(model, attr, None)
         if callable(schema_fn):
-            schema = schema_fn()
-            if isinstance(schema, dict):
-                return schema
+            try:
+                schema = schema_fn()
+                if isinstance(schema, dict):
+                    return schema
+            except Exception:
+                pass
     return None
 
 

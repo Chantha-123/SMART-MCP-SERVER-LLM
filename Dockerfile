@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv (required for Python-based MCP servers using uv run)
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uv/bin/ /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 # Set the working directory
 WORKDIR /app

@@ -1,0 +1,35 @@
+services:
+  web:
+    build: .
+    container_name: community_mcp_web
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      # Default to containerized ollama service
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      - ollama
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Mount the .env file so modifications take effect inside the running container
+      - .env:/app/.env
+      # Mount the web folder so frontend changes reflect immediately
+      - ./web:/app/web
+    restart: always
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: always
+
+volumes:
+  ollama_data:

@@ -32,4 +32,5 @@ langchain-groq
 # Web Dashboard
 fastapi
 uvicorn
+mcp<2.0.0
 

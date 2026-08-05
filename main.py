@@ -32,7 +32,7 @@ load_dotenv(ROOT_DIR / ".env", override=False)
 sys.path.insert(0, str(ROOT_DIR))
 
 from lib.base_mcp import create_mcp_cli
-from agents import get_github_agent, get_jira_agent, get_slack_agent, get_google_chat_agent, get_telegram_agent
+from agents import get_github_agent, get_jira_agent, get_slack_agent, get_google_chat_agent, get_telegram_agent, get_web_agent
 
 
 app = typer.Typer(
@@ -68,6 +68,12 @@ app.add_typer(
     create_mcp_cli("google-chat", get_google_chat_agent, "Google Chat Agent CLI"),
     name="google-chat",
     help="Google Chat Agent - Send messages to Google Chat spaces",
+)
+
+app.add_typer(
+    create_mcp_cli("web-reader", get_web_agent, "Web Reader Agent CLI"),
+    name="web-reader",
+    help="Web Reader Agent - Fetch and read web pages by URL",
 )
 
 @app.command("web")

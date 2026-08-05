@@ -52,6 +52,7 @@ def _get_llm_provider():
     from llm_providers import gemini
     from llm_providers import groq_llm
     from llm_providers import openai
+    from llm_providers import ollama
 
     provider = os.getenv("LLM_PROVIDER", "openai").lower()
 
@@ -61,10 +62,12 @@ def _get_llm_provider():
         return groq_llm.get_llm
     elif provider == "gemini":
         return gemini.get_llm
+    elif provider == "ollama":
+        return ollama.get_llm
     else:
         raise ValueError(
             f"Unsupported LLM_PROVIDER: {provider}. "
-            f"Supported values: 'openai', 'groq', 'gemini'"
+            f"Supported values: 'openai', 'groq', 'gemini', 'ollama'"
         )
 
 
@@ -116,6 +119,19 @@ def get_schema_enum(prop_schema: Any) -> list[Any] | None:
     return None
 
 
+def get_schema_type(prop_schema: Any) -> str | None:
+    if not isinstance(prop_schema, dict):
+        return None
+    if "type" in prop_schema and isinstance(prop_schema["type"], str):
+        return prop_schema["type"]
+    for combiner in ("anyOf", "oneOf"):
+        if combiner in prop_schema and isinstance(prop_schema[combiner], list):
+            for sub_schema in prop_schema[combiner]:
+                if isinstance(sub_schema, dict) and "type" in sub_schema and isinstance(sub_schema["type"], str):
+                    return sub_schema["type"]
+    return None
+
+
 def sanitize_args(args: dict[str, Any], schema: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(schema, dict) or "properties" not in schema:
         return args
@@ -126,11 +142,32 @@ def sanitize_args(args: dict[str, Any], schema: dict[str, Any]) -> dict[str, Any
             sanitized_args[key] = value
             continue
         prop_schema = properties[key]
-        allowed_values = get_schema_enum(prop_schema)
-        if allowed_values is not None:
-            if value not in allowed_values:
-                # Omit parameter to fall back to the default behavior
-                continue
+        if isinstance(prop_schema, dict):
+            prop_type = get_schema_type(prop_schema)
+            if prop_type in ("integer", "number"):
+                if isinstance(value, float) and value.is_integer():
+                    value = int(value)
+                elif isinstance(value, str):
+                    try:
+                        val_float = float(value)
+                        if val_float.is_integer():
+                            value = int(val_float)
+                        else:
+                            value = val_float
+                    except (ValueError, TypeError):
+                        pass
+            elif prop_type == "boolean":
+                if isinstance(value, str):
+                    if value.lower() in ("true", "1"):
+                        value = True
+                    elif value.lower() in ("false", "0"):
+                        value = False
+
+            allowed_values = get_schema_enum(prop_schema)
+            if allowed_values is not None:
+                if value not in allowed_values:
+                    # Omit parameter to fall back to the default behavior
+                    continue
         sanitized_args[key] = value
     return sanitized_args
 
@@ -149,12 +186,24 @@ class SanitizedTool(BaseTool):
         self._original_tool = original_tool
         self._schema_dict = schema_dict
 
+    def _get_effective_schema(self) -> dict[str, Any]:
+        schema = self._schema_dict or {}
+        if not isinstance(schema, dict) or "properties" not in schema:
+            schema = schema_from_model(getattr(self._original_tool, "args_schema", None)) or {}
+        if not isinstance(schema, dict) or "properties" not in schema:
+            tool_args = getattr(self._original_tool, "args", None)
+            if isinstance(tool_args, dict):
+                schema = {"properties": tool_args}
+        return schema or {}
+
     def _run(self, *args: Any, **kwargs: Any) -> Any:
-        sanitized_kwargs = sanitize_args(kwargs, self._schema_dict)
+        schema = self._get_effective_schema()
+        sanitized_kwargs = sanitize_args(kwargs, schema)
         return self._original_tool.invoke(sanitized_kwargs)
 
     async def _arun(self, *args: Any, **kwargs: Any) -> Any:
-        sanitized_kwargs = sanitize_args(kwargs, self._schema_dict)
+        schema = self._get_effective_schema()
+        sanitized_kwargs = sanitize_args(kwargs, schema)
         return await self._original_tool.ainvoke(sanitized_kwargs)
 
 
@@ -291,13 +340,14 @@ class BaseAgent:
 
         # Filter tools based on enabled list to support low token-limit providers (like Groq free tier)
         enabled_str = os.getenv(f"{self.service_name.upper()}_ENABLED_TOOLS") or os.getenv("ENABLED_TOOLS")
-        if not enabled_str and os.getenv("LLM_PROVIDER") == "groq":
+        if not enabled_str and os.getenv("LLM_PROVIDER") in ("groq", "ollama"):
             default_groq_tools = {
                 "github": "git_search_code,search_code,git_get_issue,get_issue,git_search_repositories,search_repositories",
                 "slack": "conversations_history,conversations_add_message",
                 "telegram": "tg_dialogs,tg_send",
                 "jira": "jira_search,jira_get_issue",
-                "google-chat": "list_spaces,send_message"
+                "google-chat": "list_spaces,send_message",
+                "web-reader": "fetch"
             }
             enabled_str = default_groq_tools.get(self.service_name)
 
@@ -321,6 +371,10 @@ class BaseAgent:
             sanitized_name = sanitize_tool_name(original_name)
             
             args_schema = schema_from_model(getattr(tool, "args_schema", None))
+            if not isinstance(args_schema, dict) or "properties" not in args_schema:
+                tool_args = getattr(tool, "args", None)
+                if isinstance(tool_args, dict):
+                    args_schema = {"properties": tool_args}
             metadata = getattr(tool, "metadata", {}) or {}
             
             # Wrap the tool in SanitizedTool to handle model parameter hallucinations (like sort enums on Groq)
@@ -350,11 +404,20 @@ class BaseAgent:
         
         valid_tool_names = list(state.tool_map.keys())
         tool_names_str = ", ".join(valid_tool_names) if valid_tool_names else "None"
+        extra_instructions = ""
+        if self.service_name == "github":
+            extra_instructions = (
+                "\nGITHUB SEARCH INSTRUCTION: When calling search_repositories or search_code, "
+                "always pass a valid GitHub search query string `q` (e.g., `user:Chantha-123` or specific repo keywords). "
+                "NEVER use invalid query placeholders like `user:me` or `user:my_username` because GitHub API will reject them with HTTP 422 error."
+            )
+
         system_prompt = (
             f"You are a helpful assistant with access to the following tools: {tool_names_str}.\n"
             "CRITICAL TOOL INSTRUCTION: You MUST ONLY call tools explicitly listed in the available tools above. "
             "Never attempt to call or invent any unlisted tools (such as brave_search, web_search, python, etc.). "
             "If none of the available tools fit the request, answer directly in plain text without making any tool calls."
+            f"{extra_instructions}"
         )
 
         # Create React agent with model, tools, and system prompt

@@ -339,25 +339,32 @@
             height: 100%;
             background-color: var(--bg-base);
             position: relative;
+            min-width: 0;
+            overflow: hidden;
+            width: 100%;
         }
 
         /* Header Design */
         .app-header {
-            height: var(--header-height);
+            min-height: var(--header-height);
             border-bottom: 1px solid var(--border-color);
-            padding: 0 30px;
+            padding: 10px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             background-color: hsla(240, 20%, 8%, 0.8);
             backdrop-filter: blur(10px);
             z-index: 5;
+            gap: 12px;
+            flex-wrap: wrap;
         }
 
         .active-agent-detail {
             display: flex;
             align-items: center;
             gap: 12px;
+            min-width: 0;
+            flex-wrap: wrap;
         }
 
         .header-agent-title {
@@ -374,19 +381,24 @@
             border: 1px solid var(--border-color);
             border-radius: 6px;
             color: var(--text-muted);
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .header-actions {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
+            flex-shrink: 0;
         }
 
         .btn {
             background-color: var(--bg-surface);
             border: 1px solid var(--border-color);
             color: var(--text-main);
-            padding: 10px 18px;
+            padding: 10px 16px;
             border-radius: 10px;
             font-size: 0.85rem;
             font-weight: 600;
@@ -395,6 +407,7 @@
             align-items: center;
             gap: 8px;
             transition: var(--transition-smooth);
+            white-space: nowrap;
         }
 
         .btn:hover {
@@ -418,16 +431,20 @@
         .chat-pane {
             flex-grow: 1;
             overflow-y: auto;
-            padding: 30px;
+            overflow-x: hidden;
+            padding: 24px;
             display: flex;
             flex-direction: column;
-            gap: 24px;
+            gap: 20px;
+            min-width: 0;
+            width: 100%;
         }
 
         /* Chat Message Design */
         .msg-row {
             display: flex;
             width: 100%;
+            min-width: 0;
         }
 
         .msg-row.user {
@@ -439,12 +456,13 @@
         }
 
         .msg-bubble {
-            max-width: 75%;
-            padding: 16px 20px;
+            max-width: 80%;
+            padding: 14px 18px;
             border-radius: 16px;
-            font-size: 0.95rem;
+            font-size: 0.93rem;
             line-height: 1.6;
-            word-wrap: break-word;
+            word-break: break-word;
+            overflow-wrap: anywhere;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
 
@@ -453,6 +471,8 @@
             color: white;
             border-bottom-right-radius: 4px;
             box-shadow: 0 4px 15px var(--primary-glow);
+            margin-left: auto;
+            white-space: pre-wrap;
         }
 
         .msg-row.agent .msg-bubble {
@@ -683,10 +703,122 @@
             color: var(--text-muted);
             line-height: 1.5;
         }
+
+        /* Mobile Overlay */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(4px);
+            z-index: 95;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+
+        /* Mobile Hamburger Toggle Button */
+        .mobile-toggle-btn {
+            display: none;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            flex-shrink: 0;
+        }
+
+        .mobile-toggle-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* Responsive Breakpoints */
+        @media (max-width: 900px) {
+            .mobile-toggle-btn {
+                display: flex;
+            }
+
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                bottom: 0;
+                z-index: 100;
+                transform: translateX(-100%);
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                box-shadow: 5px 0 25px rgba(0, 0, 0, 0.5);
+                width: 300px;
+                max-width: 85vw;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .app-header {
+                padding: 10px 16px;
+            }
+
+            .chat-pane {
+                padding: 16px;
+                gap: 16px;
+            }
+
+            .msg-bubble {
+                max-width: 92%;
+                padding: 12px 16px;
+                font-size: 0.88rem;
+            }
+
+            .input-area {
+                padding: 12px 14px 18px 14px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .header-agent-title {
+                font-size: 0.92rem;
+            }
+
+            .header-model-badge {
+                font-size: 0.68rem;
+                padding: 2px 6px;
+            }
+
+            .btn {
+                padding: 8px 12px;
+                font-size: 0.78rem;
+            }
+
+            .btn-text {
+                display: none;
+            }
+
+            .suggestion-pill {
+                font-size: 0.74rem;
+                padding: 5px 10px;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="app-container">
+        <!-- Sidebar Overlay for Mobile -->
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar(false)"></div>
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
@@ -760,17 +892,20 @@
         <main class="main-content">
             <!-- Header -->
             <header class="app-header">
+                <button class="mobile-toggle-btn" id="mobileToggleBtn" onclick="toggleSidebar()" title="Toggle Sidebar">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
                 <div class="active-agent-detail">
                     <span class="header-agent-title" id="activeAgentTitle">No Agent Selected</span>
                     <span class="header-model-badge" id="activeModelTitle">No Model</span>
                 </div>
                 
                 <div class="header-actions">
-                    <button class="btn" onclick="clearActiveSession()">
-                        <i class="fa-solid fa-trash-can"></i> Clear Chat
+                    <button class="btn" onclick="clearActiveSession()" title="Clear Chat">
+                        <i class="fa-solid fa-trash-can"></i> <span class="btn-text">Clear Chat</span>
                     </button>
-                    <button class="btn btn-primary" onclick="initializeOrFetchTools()">
-                        <i class="fa-solid fa-arrows-rotate"></i> Re-Init Agent
+                    <button class="btn btn-primary" onclick="initializeOrFetchTools()" title="Re-Init Agent">
+                        <i class="fa-solid fa-arrows-rotate"></i> <span class="btn-text">Re-Init Agent</span>
                     </button>
                 </div>
             </header>
@@ -808,7 +943,7 @@
 
         const SUGGESTIONS = {
             github: [
-                "List my repositories",
+                "List repositories for user: Chantha-123",
                 "Create a new issue with title test",
                 "Show details of my latest PR"
             ],
@@ -830,6 +965,11 @@
             "google-chat": [
                 "List Google Chat spaces",
                 "Send a greeting message"
+            ],
+            "web-reader": [
+                "Summarize content from https://www.khmer24.com/en",
+                "Find car listings and prices on https://www.khmer24.com/en/c-cars-and-vehicles.html",
+                "What is the latest news or information on https://www.khmer24.com/en"
             ]
         };
 
@@ -838,7 +978,8 @@
             jira: "fa-solid fa-jira",
             slack: "fa-brands fa-slack",
             telegram: "fa-brands fa-telegram",
-            "google-chat": "fa-solid fa-comment-dots"
+            "google-chat": "fa-solid fa-comment-dots",
+            "web-reader": "fa-solid fa-globe"
         };
 
         const AGENT_DESCRIPTIONS = {
@@ -846,7 +987,8 @@
             jira: "Issue tracking & sprints",
             slack: "Channel communications",
             telegram: "Chat lists & account operations",
-            "google-chat": "Google Chat space alerts"
+            "google-chat": "Google Chat space alerts",
+            "web-reader": "Fetch & read website URLs"
         };
 
         // Initialize App
@@ -909,10 +1051,24 @@
             const provider = document.getElementById('providerSelect').value;
             const modelInput = document.getElementById('modelInput');
             const apiKeyInput = document.getElementById('apiKeyInput');
+            const apiKeyLabel = document.querySelector('label[for="apiKeyInput"]');
+            const apiKeyToggle = document.querySelector('.api-key-toggle');
 
             // Apply defaults from configData
             modelInput.value = configData.models[provider] || "";
             apiKeyInput.value = configData.api_keys[provider] || "";
+
+            if (provider === 'ollama') {
+                if (apiKeyLabel) apiKeyLabel.textContent = "Ollama URL (optional)";
+                apiKeyInput.placeholder = "e.g. http://localhost:11434 or http://ollama:11434";
+                apiKeyInput.type = "text";
+                if (apiKeyToggle) apiKeyToggle.style.display = "none";
+            } else {
+                if (apiKeyLabel) apiKeyLabel.textContent = "API Key";
+                apiKeyInput.placeholder = "Enter API Key";
+                apiKeyInput.type = "password";
+                if (apiKeyToggle) apiKeyToggle.style.display = "block";
+            }
 
             updateHeaderModel();
 
@@ -923,6 +1079,21 @@
             }
         }
 
+        function toggleSidebar(forceState) {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (!sidebar || !overlay) return;
+            const isOpen = forceState !== undefined ? forceState : !sidebar.classList.contains('open');
+
+            if (isOpen) {
+                sidebar.classList.add('open');
+                overlay.classList.add('active');
+            } else {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('active');
+            }
+        }
+
         function handleModelOrKeyChange() {
             updateHeaderModel();
             clearActiveSession();
@@ -930,7 +1101,10 @@
         }
 
         function selectAgent(agentName) {
-            if (activeAgentName === agentName) return;
+            if (activeAgentName === agentName) {
+                toggleSidebar(false);
+                return;
+            }
 
             // Update UI class
             if (activeAgentName) {
@@ -938,6 +1112,9 @@
             }
             activeAgentName = agentName;
             document.getElementById(`card-${agentName}`).classList.add('active');
+
+            // Close mobile sidebar after selecting an agent
+            toggleSidebar(false);
 
             // Update Header
             document.getElementById('activeAgentTitle').textContent = agentName.replace('-', ' ') + " Agent";
@@ -1031,9 +1208,22 @@
 
             } catch (err) {
                 console.error("Failed to retrieve tools:", err);
+                
+                let displayMsg = "Initialization failed. Verify credentials.";
+                try {
+                    const errObj = JSON.parse(err.message);
+                    if (errObj && errObj.detail) {
+                        displayMsg = errObj.detail;
+                    }
+                } catch (e) {
+                    if (err.message) {
+                        displayMsg = err.message;
+                    }
+                }
+
                 toolsList.innerHTML = `
                     <div style="font-size:0.72rem; color:var(--error); text-align:center; padding:10px;">
-                        Initialization failed. Verify credentials.
+                        ${displayMsg}
                     </div>
                 `;
                 document.getElementById('toolCount').textContent = '0';

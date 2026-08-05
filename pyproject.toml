@@ -27,4 +27,5 @@ dependencies = [
     "langchain-openai>=1.1.0",
     "fastapi>=0.139.1",
     "uvicorn>=0.51.0",
+    "mcp<2.0.0",
 ]

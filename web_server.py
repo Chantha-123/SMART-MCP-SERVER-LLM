@@ -7,7 +7,7 @@ from typing import Dict, Any, List
 
 from lib.state import RuntimeState
 from lib.base_agent import ensure_agent_initialized, stream_agent_response
-from agents import get_github_agent, get_jira_agent, get_slack_agent, get_google_chat_agent, get_telegram_agent
+from agents import get_github_agent, get_jira_agent, get_slack_agent, get_google_chat_agent, get_telegram_agent, get_web_agent
 from langchain_core.messages import HumanMessage, AIMessage
 from lib.utils import extract_message_text
 
@@ -20,6 +20,7 @@ AGENT_BUILDERS = {
     "slack": get_slack_agent,
     "telegram": get_telegram_agent,
     "google-chat": get_google_chat_agent,
+    "web-reader": get_web_agent,
 }
 
 class ActiveAgent:
@@ -58,6 +59,8 @@ class ActiveAgent:
                 os.environ["OPENAI_API_KEY"] = api_key.strip()
             elif provider == "groq" and api_key and api_key.strip():
                 os.environ["GROQ_API_KEY"] = api_key.strip()
+            elif provider == "ollama":
+                os.environ["OLLAMA_BASE_URL"] = api_key.strip() if (api_key and api_key.strip()) else os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
             # Now run agent initialization
             await ensure_agent_initialized(self.state, self.agent)
@@ -94,20 +97,36 @@ class ToolQueryRequest(BaseModel):
 async def get_config():
     # Read currently configured variables in .env
     return {
-        "providers": ["gemini", "openai", "groq"],
+        "providers": ["gemini", "openai", "groq", "ollama"],
         "agents": list(AGENT_BUILDERS.keys()),
         "current_provider": os.getenv("LLM_PROVIDER", "gemini"),
         "models": {
             "gemini": os.getenv("GEMINI_MODEL", "models/gemini-3.1-flash-lite"),
             "openai": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-            "groq": os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+            "groq": os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
+            "ollama": os.getenv("OLLAMA_MODEL", "llama3.1")
         },
         "api_keys": {
             "gemini": os.getenv("GOOGLE_API_KEY", ""),
             "openai": os.getenv("OPENAI_API_KEY", ""),
-            "groq": os.getenv("GROQ_API_KEY", "")
+            "groq": os.getenv("GROQ_API_KEY", ""),
+            "ollama": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         }
     }
+
+def format_init_error(e: Exception) -> str:
+    err_msg = str(e)
+    # Extract sub-exceptions if it is an ExceptionGroup (common with asyncio TaskGroups)
+    if hasattr(e, "exceptions"):
+        sub_errs = [str(x) for x in getattr(e, "exceptions", [])]
+        if sub_errs:
+            err_msg = f"{err_msg} -> {'; '.join(sub_errs)}"
+            
+    # Provide helpful suggestion for GitHub Copilot 401 Unauthorized errors
+    if "401" in err_msg and "githubcopilot" in err_msg.lower():
+        err_msg += " (Authentication failed for GitHub Copilot. Your personal access token may not have Copilot access. To run a standard GitHub server instead, add 'GITHUB_MCP_TRANSPORT=stdio' to your .env file)"
+        
+    return err_msg
 
 @app.post("/api/agent/{agent_name}/tools")
 async def get_agent_tools(agent_name: str, req: ToolQueryRequest):
@@ -119,7 +138,7 @@ async def get_agent_tools(agent_name: str, req: ToolQueryRequest):
         await agent_wrapper.ensure_initialized(req.provider, req.model, req.api_key)
         return {"tools": agent_wrapper.state.tool_summaries}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load agent tools: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load agent tools: {format_init_error(e)}")
 
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):
@@ -130,7 +149,7 @@ async def chat_endpoint(req: ChatRequest):
     try:
         await agent_wrapper.ensure_initialized(req.provider, req.model, req.api_key)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to initialize agent: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to initialize agent: {format_init_error(e)}")
 
     # Record message to history
     human_msg = HumanMessage(content=req.message)
