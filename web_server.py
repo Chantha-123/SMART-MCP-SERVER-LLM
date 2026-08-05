@@ -109,7 +109,7 @@ async def get_config():
             "gemini": os.getenv("GEMINI_MODEL", "models/gemini-3.1-flash-lite"),
             "openai": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             "groq": os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
-            "ollama": os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+            "ollama": os.getenv("OLLAMA_MODEL", "gemma2:2b")
         },
         "api_keys": {
             "gemini": os.getenv("GOOGLE_API_KEY", ""),
