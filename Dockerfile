@@ -1,40 +1,44 @@
 # Use a Python base image with Debian slim
 FROM python:3.12-slim
 
-# Install system dependencies, including Node.js (required for npx and npm MCP servers)
+# Install system dependencies, Node.js, and Ollama engine
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     gnupg \
     build-essential \
+    procps \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
+    && curl -fsSL https://ollama.com/install.sh | sh \
     # Clean up apt caches to minimize image size
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv (required for Python-based MCP servers using uv run)
+# Install uv (required for Python dependencies)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
-# Set the working directory
+# Set working directory
 WORKDIR /app
 
 # Copy dependency files first for caching
 COPY pyproject.toml requirements.txt ./
 
-# Install python dependencies using uv (faster and cleaner)
+# Install python dependencies using uv
 RUN uv pip install --system -r requirements.txt
 
-# Copy the rest of the application files
+# Copy application files
 COPY . .
 
-# Expose the port FastAPI runs on
-EXPOSE 8000
+# Expose Hugging Face default port 7860
+EXPOSE 7860
 
 # Set environment variables
 ENV HOST=0.0.0.0
-ENV PORT=8000
+ENV PORT=7860
 ENV PYTHONUNBUFFERED=1
+ENV OLLAMA_BASE_URL=http://127.0.0.1:11434
+ENV OLLAMA_MODEL=llama3.2:1b
 
-# Run the FastAPI server directly with uvicorn
-CMD ["uvicorn", "web_server:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start Ollama service in background, wait for it to boot, pre-pull llama3.2:1b, then launch web server
+CMD ["sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.2:1b && uvicorn web_server:app --host 0.0.0.0 --port ${PORT:-7860}"]

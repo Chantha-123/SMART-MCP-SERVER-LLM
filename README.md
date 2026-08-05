@@ -182,32 +182,50 @@ python3 main.py github --help
 
 ---
 
-## 🤗 How to Deploy to Hugging Face Spaces
+## 🤗 How to Deploy to Hugging Face Spaces (All-in-One Docker + Ollama)
 
-### Step 1: Update Port in `Dockerfile`
-Hugging Face Spaces expects web traffic on port **7860**. Ensure your `Dockerfile` has:
+This project is configured with an **All-In-One Dockerfile** that runs both the **Web Dashboard** and an embedded **Ollama engine** directly inside Hugging Face Spaces.
 
-```dockerfile
-EXPOSE 7860
-ENV PORT=7860
+**Benefits**:
+- **0 Load on your Mac**: Runs 100% in the cloud.
+- **$0 Cost**: Uses Hugging Face's free Docker Space tier.
+- **Pre-loaded Model**: Automatically installs and pulls `llama3.2:1b` inside the container.
 
-CMD ["sh", "-c", "uvicorn web_server:app --host 0.0.0.0 --port ${PORT:-7860}"]
+---
+
+### Step 1: Create a Space on Hugging Face
+1. Go to [huggingface.co/new-space](https://huggingface.co/new-space).
+2. Choose **Space SDK**: **Docker** $\rightarrow$ **Blank**.
+3. Set **Hardware**: `CPU basic (Free)`.
+4. Click **Create Space**.
+
+---
+
+### Step 2: Push Repository to Hugging Face
+Run these commands in your Mac terminal inside the project directory:
+
+```bash
+# 1. Commit updated Dockerfile
+git add Dockerfile README.md
+git commit -m "Configure All-in-One Dockerfile for Hugging Face Spaces with Ollama"
+
+# 2. Add your Hugging Face Space repository as a remote
+# Replace YOUR_USERNAME and YOUR_SPACE_NAME with your details
+git remote add hf https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME
+
+# 3. Push code to Hugging Face
+git push hf main
 ```
 
-### Step 2: Push Code to Hugging Face Space
-1. Create a **Docker Space** (Blank template) at [huggingface.co/new-space](https://huggingface.co/new-space).
-2. Add your HF remote and push:
-   ```bash
-   git remote add hf https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME
-   git push hf main
-   ```
-3. In Hugging Face Space **Settings** $\rightarrow$ **Variables and secrets**, add your API keys (`GOOGLE_API_KEY`, etc.).
+*(If prompted for a password, enter your Hugging Face Access Token with `write` permissions from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)).*
 
-### Step 3: Connect Hugging Face Space to Local Mac Ollama (100% Free Tokens)
-If you host your web app on Hugging Face but want your local Mac GPU to handle LLM processing for free:
-1. Allow remote origins on Mac: `launchctl setenv OLLAMA_ORIGINS "*"`
-2. Start an HTTP tunnel using Ngrok: `ngrok http 11434`
-3. Enter your Ngrok URL (`https://xxxx-xx-xx-xx.ngrok-free.app`) into the **Ollama URL** input on your Hugging Face website.
+---
+
+### Step 3: Access your Live App
+1. Go to your Space page on Hugging Face.
+2. Click the **App** tab.
+3. Hugging Face will build the Docker container, start Ollama, download `llama3.2:1b`, and launch the Web Dashboard automatically.
+4. Select **Ollama** as provider and start chatting for **$0 cost**!
 
 ---
 
