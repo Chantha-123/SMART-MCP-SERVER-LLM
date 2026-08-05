@@ -16,8 +16,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy uv package manager binary
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
-# Copy official Ollama binary and llama-server libraries directly from official image
+# Copy official Ollama binary and all library/runner files from official image
+COPY --from=ollama/ollama:latest /usr/bin/ollama /usr/bin/ollama
 COPY --from=ollama/ollama:latest /usr/bin/ollama /usr/local/bin/ollama
+COPY --from=ollama/ollama:latest /usr/lib/ollama /usr/lib/ollama
 COPY --from=ollama/ollama:latest /usr/lib/ollama /usr/local/lib/ollama
 
 # Set working directory
@@ -42,5 +44,5 @@ ENV PYTHONUNBUFFERED=1
 ENV OLLAMA_BASE_URL=http://127.0.0.1:11434
 ENV OLLAMA_MODEL=llama3.2:1b
 
-# Start Ollama service in background, wait for it to boot, pre-pull llama3.2:1b, then launch web server
-CMD ["sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.2:1b && uvicorn web_server:app --host 0.0.0.0 --port ${PORT:-7860}"]
+# Locate llama-server runner binaries, place in execution paths, start Ollama service, pre-pull model, then launch web server
+CMD ["sh", "-c", "find /usr -name '*llama-server*' -exec cp {} /usr/local/bin/ \\; 2>/dev/null || true; find /usr -name '*llama-server*' -exec cp {} /usr/bin/ \\; 2>/dev/null || true; ollama serve & sleep 5 && ollama pull llama3.2:1b && uvicorn web_server:app --host 0.0.0.0 --port ${PORT:-7860}"]
