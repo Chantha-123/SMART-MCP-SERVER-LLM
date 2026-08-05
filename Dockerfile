@@ -16,8 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy uv package manager binary
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
-# Copy official Ollama binary directly from official image
+# Copy official Ollama binary and llama-server libraries directly from official image
 COPY --from=ollama/ollama:latest /usr/bin/ollama /usr/local/bin/ollama
+COPY --from=ollama/ollama:latest /usr/lib/ollama /usr/local/lib/ollama
 
 # Set working directory
 WORKDIR /app
