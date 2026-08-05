@@ -30,40 +30,37 @@ def _pull_model_in_background(base_url: str, model_name: str):
 def ensure_model_pulled(base_url: str, model_name: str):
     """
     Checks if a model is installed in the local Ollama instance.
-    If not, starts pulling in a background thread and raises a ValueError.
+    If not, starts pulling in a background thread without crashing agent initialization.
     """
     try:
         # Check tags to see if model is already pulled
-        response = requests.get(f"{base_url}/api/tags", timeout=5)
+        response = requests.get(f"{base_url}/api/tags", timeout=3)
         if response.status_code == 200:
             tags = response.json()
             models = [m["name"] for m in tags.get("models", [])]
-            # Ollama models might be listed with tags e.g. "llama3.1:latest"
-            if model_name in models or f"{model_name}:latest" in models:
-                logger.info(f"Ollama model '{model_name}' is already available.")
-                return
+            
+            target_lower = model_name.lower()
+            target_base = target_lower.split(":")[0]
+            
+            for m in models:
+                m_lower = m.lower()
+                m_base = m_lower.split(":")[0]
+                if target_lower == m_lower or f"{target_lower}:latest" == m_lower or target_base == m_base:
+                    logger.info(f"Ollama model '{model_name}' (matched '{m}') is available.")
+                    return
     except Exception as e:
-        logger.error(f"Failed to check local tags on Ollama: {e}")
+        logger.warning(f"Could not verify tags on Ollama at {base_url}: {e}")
+        return
 
     # Check if this model is already being pulled in the background
-    if model_name in _pulling_models:
-        raise ValueError(
-            f"Model '{model_name}' is currently downloading in the background. "
-            "Please wait a few minutes and try again."
-        )
-
-    # Start the pull in a background thread to prevent blocking FastAPI's event loop
-    _pulling_models.add(model_name)
-    threading.Thread(
-        target=_pull_model_in_background,
-        args=(base_url, model_name),
-        daemon=True
-    ).start()
-
-    raise ValueError(
-        f"Model '{model_name}' was not found locally. We have started downloading/pulling it "
-        "for you in the background. Please wait 2-3 minutes for the download to complete and try again."
-    )
+    if model_name not in _pulling_models:
+        logger.info(f"Model '{model_name}' not detected locally. Triggering background pull...")
+        _pulling_models.add(model_name)
+        threading.Thread(
+            target=_pull_model_in_background,
+            args=(base_url, model_name),
+            daemon=True
+        ).start()
 
 def get_llm() -> BaseChatModel:
     base_url = (os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434").strip()
