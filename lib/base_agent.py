@@ -1,4 +1,7 @@
 import os
+import json
+import re
+import logging
 from typing import Any, cast
 
 from pydantic import PrivateAttr
@@ -6,6 +9,29 @@ from langchain_core.tools import BaseTool
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.prebuilt import create_react_agent
+
+logger = logging.getLogger(__name__)
+
+
+def parse_raw_json_tool_call(content: str) -> tuple[str, dict[str, Any]] | None:
+    if not isinstance(content, str) or not content.strip():
+        return None
+
+    text = content.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\n?", "", text)
+        text = re.sub(r"\n?```$", "", text).strip()
+
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict):
+            name = data.get("name") or data.get("tool") or data.get("action")
+            args = data.get("arguments") or data.get("parameters") or data.get("args") or {}
+            if isinstance(name, str) and isinstance(args, dict):
+                return name, args
+    except Exception:
+        pass
+    return None
 
 from .state import RuntimeState
 from .utils import (
@@ -475,5 +501,32 @@ async def stream_agent_response(
     
     if last_ai_message is None:
         raise RuntimeError("The agent did not return a response.")
+
+    # Fallback for models (e.g. Ollama/Qwen) that output raw JSON tool calls in text content instead of tool_calls field
+    if last_ai_message and not getattr(last_ai_message, "tool_calls", None):
+        raw_content = getattr(last_ai_message, "content", "")
+        if isinstance(raw_content, str) and raw_content.strip():
+            parsed = parse_raw_json_tool_call(raw_content)
+            if parsed:
+                tool_name, tool_args = parsed
+                sanitized_name = sanitize_tool_name(tool_name)
+                target_tool = state.tool_map.get(sanitized_name) or state.tool_map.get(tool_name)
+                if target_tool:
+                    logger.info(f"Fallback executing raw JSON tool call from LLM text output: {tool_name}({tool_args})")
+                    try:
+                        tool_result = await target_tool.ainvoke(tool_args)
+                        tool_msg = ToolMessage(content=str(tool_result), name=sanitized_name, tool_call_id="call_fallback_1")
+                        fake_ai_call = AIMessage(
+                            content="",
+                            tool_calls=[{"name": sanitized_name, "args": tool_args, "id": "call_fallback_1"}]
+                        )
+                        followup_history = sanitized_history + [fake_ai_call, tool_msg]
+                        followup_result = await executor.ainvoke({"messages": followup_history})
+                        for msg in reversed(followup_result.get("messages", [])):
+                            if isinstance(msg, AIMessage):
+                                return msg
+                    except Exception as e:
+                        logger.error(f"Fallback tool execution error: {e}")
+
     return last_ai_message
 
