@@ -67,7 +67,7 @@ def ensure_model_pulled(base_url: str, model_name: str):
 
 def get_llm() -> BaseChatModel:
     base_url = (os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434").strip()
-    model_id = (os.getenv("OLLAMA_MODEL") or os.getenv("MODEL") or "llama3.1").strip()
+    model_id = (os.getenv("OLLAMA_MODEL") or os.getenv("MODEL") or "qwen2.5-coder:7b").strip()
     
     if not base_url.startswith("http"):
         base_url = f"http://{base_url}"

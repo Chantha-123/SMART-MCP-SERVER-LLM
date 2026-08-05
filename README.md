@@ -159,7 +159,7 @@ Docker on macOS cannot directly access Apple Silicon GPU hardware (Metal). For m
 1. **Install & Run Ollama natively on macOS**:
    Download from [ollama.com](https://ollama.com) and run in terminal:
    ```bash
-   ollama pull llama3.1
+   ollama pull qwen2.5-coder:7b
    ```
 2. **Start Web Dashboard container**:
    ```bash
@@ -199,7 +199,7 @@ This project is configured with an **All-In-One Dockerfile** that runs both the 
 **Benefits**:
 - **0 Load on your Mac**: Runs 100% in the cloud.
 - **$0 Cost**: Uses Hugging Face's free Docker Space tier.
-- **Pre-loaded Model**: Automatically installs and pulls `llama3.2:1b` inside the container.
+- **Pre-loaded Model**: Automatically installs and pulls `qwen2.5-coder:7b` inside the container.
 
 ---
 

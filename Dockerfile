@@ -42,7 +42,7 @@ ENV HOST=0.0.0.0
 ENV PORT=7860
 ENV PYTHONUNBUFFERED=1
 ENV OLLAMA_BASE_URL=http://127.0.0.1:11434
-ENV OLLAMA_MODEL=llama3.2:1b
+ENV OLLAMA_MODEL=qwen2.5-coder:7b
 
 # Locate llama-server runner binaries, place in execution paths, start Ollama service, pre-pull model, then launch web server
-CMD ["sh", "-c", "find /usr -name '*llama-server*' -exec cp {} /usr/local/bin/ \\; 2>/dev/null || true; find /usr -name '*llama-server*' -exec cp {} /usr/bin/ \\; 2>/dev/null || true; ollama serve & sleep 5 && ollama pull llama3.2:1b && uvicorn web_server:app --host 0.0.0.0 --port ${PORT:-7860}"]
+CMD ["sh", "-c", "find /usr -name '*llama-server*' -exec cp {} /usr/local/bin/ \\; 2>/dev/null || true; find /usr -name '*llama-server*' -exec cp {} /usr/bin/ \\; 2>/dev/null || true; ollama serve & sleep 5 && ollama pull qwen2.5-coder:7b && uvicorn web_server:app --host 0.0.0.0 --port ${PORT:-7860}"]
