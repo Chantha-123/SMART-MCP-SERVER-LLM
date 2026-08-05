@@ -1,7 +1,7 @@
 # Use a Python base image with Debian slim
 FROM python:3.12-slim
 
-# Install system dependencies, Node.js, and Ollama engine
+# Install system dependencies and Node.js
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
@@ -10,13 +10,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
-    && curl -fsSL https://ollama.com/install.sh | sh \
-    # Clean up apt caches to minimize image size
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv (required for Python dependencies)
+# Copy uv package manager binary
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+# Copy official Ollama binary directly from official image
+COPY --from=ollama/ollama:latest /usr/bin/ollama /usr/local/bin/ollama
 
 # Set working directory
 WORKDIR /app
