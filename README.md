@@ -232,10 +232,31 @@ git push hf main
 ---
 
 ### Step 3: Access your Live App
-1. Go to your Space page on Hugging Face.
+1. Go to your Space page on Hugging Face: [https://huggingface.co/spaces/ActiveProgrammar/Asssingment_LLM](https://huggingface.co/spaces/ActiveProgrammar/Asssingment_LLM)
 2. Click the **App** tab.
-3. Hugging Face will build the Docker container, start Ollama, download `llama3.2:1b`, and launch the Web Dashboard automatically.
+3. Hugging Face will build the Docker container, start Ollama, download `qwen2.5-coder:7b`, and launch the Web Dashboard automatically.
 4. Select **Ollama** as provider and start chatting for **$0 cost**!
+
+---
+
+## 🔄 Dual Deployment (GitHub + Hugging Face)
+
+Keep your **GitHub repository** and **Hugging Face Space** synchronized simultaneously:
+
+```bash
+# Push to both GitHub and Hugging Face in one command:
+git push origin main && git push hf main
+```
+
+Or push to them individually:
+
+```bash
+# 1. Push code updates to GitHub
+git push origin main
+
+# 2. Push code updates to Hugging Face (triggers automatic deployment)
+git push hf main
+```
 
 ---
 
