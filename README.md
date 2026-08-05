@@ -1,3 +1,13 @@
+---
+title: Community AI MCP Dashboard
+emoji: 🤖
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Community AI MCP Agent & Dashboard
 
 A unified AI Agent platform with a Web Dashboard and CLI for interacting with GitHub, Slack, Jira, Telegram, Google Chat, and Web Scraping using the Model Context Protocol (MCP) and LangChain/LangGraph. Supports Gemini, Groq, OpenAI, and local Ollama.
