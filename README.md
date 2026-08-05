@@ -159,7 +159,7 @@ Docker on macOS cannot directly access Apple Silicon GPU hardware (Metal). For m
 1. **Install & Run Ollama natively on macOS**:
    Download from [ollama.com](https://ollama.com) and run in terminal:
    ```bash
-   ollama pull gemma2:2b
+   ollama pull qwen2.5:3b
    ```
 2. **Start Web Dashboard container**:
    ```bash
@@ -199,7 +199,7 @@ This project is configured with an **All-In-One Dockerfile** that runs both the 
 **Benefits**:
 - **0 Load on your Mac**: Runs 100% in the cloud.
 - **$0 Cost**: Uses Hugging Face's free Docker Space tier.
-- **Pre-loaded Model**: Automatically installs and pulls `gemma2:2b` inside the container.
+- **Pre-loaded Model**: Automatically installs and pulls `qwen2.5:3b` inside the container.
 
 ---
 
@@ -234,7 +234,7 @@ git push hf main
 ### Step 3: Access your Live App
 1. Go to your Space page on Hugging Face: [https://huggingface.co/spaces/ActiveProgrammar/Asssingment_LLM](https://huggingface.co/spaces/ActiveProgrammar/Asssingment_LLM)
 2. Click the **App** tab.
-3. Hugging Face will build the Docker container, start Ollama, download `gemma2:2b`, and launch the Web Dashboard automatically.
+3. Hugging Face will build the Docker container, start Ollama, download `qwen2.5:3b`, and launch the Web Dashboard automatically.
 4. Select **Ollama** as provider and start chatting for **$0 cost**!
 
 ---
