@@ -161,10 +161,18 @@ async def chat(
     human_message = HumanMessage(content=message)
     session_history = state.record_message(session_id, human_message)
 
+    import time
+    start_time = time.perf_counter()
     try:
         last_ai_message = await stream_agent_response(state, session_history)
+        elapsed_time = time.perf_counter() - start_time
+        
+        text_response = extract_message_text(last_ai_message)
+        text_response += f"\n\n⏱️ Response time: {elapsed_time:.2f} seconds"
+        last_ai_message.content = text_response
+        
         state.record_message(session_id, last_ai_message)
-        print(extract_message_text(last_ai_message))
+        print(text_response)
         return 0
     except RuntimeError as exc:
         state.pop_last_message(session_id)
@@ -230,12 +238,20 @@ async def chat_loop(
         human_message = HumanMessage(content=user_message)
         session_history = state.record_message(session_id, human_message)
 
+        import time
+        start_time = time.perf_counter()
         try:
             last_ai_message = await stream_agent_response(
                 state, session_history
             )
+            elapsed_time = time.perf_counter() - start_time
+            
+            text_response = extract_message_text(last_ai_message)
+            text_response += f"\n\n⏱️ Response time: {elapsed_time:.2f} seconds"
+            last_ai_message.content = text_response
+            
             state.record_message(session_id, last_ai_message)
-            print(extract_message_text(last_ai_message))
+            print(text_response)
         except RuntimeError as exc:
             print(str(exc), file=sys.stderr)
             state.pop_last_message(session_id)
