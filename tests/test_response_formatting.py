@@ -27,13 +27,30 @@ def test_format_json_dict_with_list():
     assert "- **repo2**" in result
 
 
-def test_ignore_tool_call_invocations():
-    tool_call_json = json.dumps({
-        "name": "search_repositories",
-        "arguments": {"q": "user:Chantha-123"}
+def test_format_user_nested_repos():
+    user_json = json.dumps({
+      "name": "List of Repositories",
+      "arguments": {
+        "repos": [
+          {
+            "id": 1203531574,
+            "name": "Master-Thesis-Frontend",
+            "full_name": "Chantha-123/Master-Thesis-Frontend",
+            "private": False,
+            "html_url": "https://github.com/Chantha-123/Master-Thesis-Frontend",
+            "description": None,
+            "fork": False,
+            "created_at": "2026-04-07T05:57:00Z",
+            "updated_at": "2026-04-07T06:00:57Z",
+            "pushed_at": "2026-04-07T06:00:47Z",
+            "default_branch": "master"
+          }
+        ]
+      }
     })
-    result = format_json_payload_to_markdown(tool_call_json)
-    assert result == tool_call_json
+    result = format_json_payload_to_markdown(user_json)
+    # Check that database ID is ignored for key and name is used as link anchor
+    assert "- **[Master-Thesis-Frontend](https://github.com/Chantha-123/Master-Thesis-Frontend)**" in result
 
 
 def test_extract_message_text_integration():

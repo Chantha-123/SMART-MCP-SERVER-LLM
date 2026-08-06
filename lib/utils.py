@@ -167,9 +167,13 @@ def _format_dict_entry(entry: dict) -> str:
     """Helper to format a single dict item (e.g. Jira issue, Jira project, or GitHub repo) into Markdown."""
     fields = entry.get("fields") if isinstance(entry.get("fields"), dict) else {}
 
-    key = entry.get("key") or entry.get("id") or fields.get("key")
-    name = entry.get("name") or entry.get("full_name") or entry.get("title") or fields.get("summary")
+    # Read ID/key (ignore integer database IDs for the 'key' anchor, prioritize string keys like Jira CORE-101)
+    key_val = entry.get("key") or fields.get("key")
+    key = key_val if isinstance(key_val, str) else None
+
+    name = entry.get("name") or entry.get("full_name") or entry.get("title")
     summary = entry.get("summary") or fields.get("summary") or entry.get("description") or fields.get("description")
+    url = entry.get("html_url") or entry.get("url") or fields.get("html_url") or fields.get("url")
 
     raw_status = entry.get("status") or fields.get("status")
     status_str = ""
@@ -178,26 +182,50 @@ def _format_dict_entry(entry: dict) -> str:
     elif isinstance(raw_status, str):
         status_str = raw_status
 
-    if key and summary and key != summary:
-        status_part = f" [{status_str}]" if status_str else ""
-        return f"- **{key}**{status_part}: {summary}"
-    elif key and name and key != name:
-        status_part = f" [{status_str}]" if status_str else ""
-        return f"- **{key}** ({name}){status_part}"
-    elif name:
-        desc = entry.get("description") or (summary if summary != name else None)
-        status_part = f" [{status_str}]" if status_str else ""
-        return f"- **{name}**{status_part}" + (f": {desc}" if desc else "")
+    ident = ""
+    if key and name and key != name:
+        if url:
+            ident = f"**[{key}]({url})** ({name})"
+        else:
+            ident = f"**{key}** ({name})"
     elif key:
-        status_part = f" [{status_str}]" if status_str else ""
-        return f"- **{key}**{status_part}"
+        if url:
+            ident = f"**[{key}]({url})**"
+        else:
+            ident = f"**{key}**"
+    elif name:
+        if url:
+            ident = f"**[{name}]({url})**"
+        else:
+            ident = f"**{name}**"
+
+    status_part = f" [{status_str}]" if status_str else ""
+    
+    if ident:
+        if summary and summary != name and summary != key:
+            return f"- {ident}{status_part}: {summary}"
+        else:
+            return f"- {ident}{status_part}"
+    elif summary:
+        return f"- {summary}{status_part}"
     else:
         return f"- {json.dumps(entry)}"
 
 
+def _find_lists_in_dict(d: dict) -> list[tuple[str, list]]:
+    """Recursively search for any non-empty lists inside a dictionary structure."""
+    found = []
+    for k, v in d.items():
+        if isinstance(v, list) and v:
+            found.append((k, v))
+        elif isinstance(v, dict):
+            found.extend(_find_lists_in_dict(v))
+    return found
+
+
 def format_json_payload_to_markdown(text: str) -> str:
     """If text contains a raw JSON payload (e.g. array of repos/issues or dict of items),
-    format it as a clean Markdown list unless it is a tool call invocation.
+    format it as a clean Markdown list.
     """
     if not isinstance(text, str) or not text.strip():
         return text
@@ -212,9 +240,6 @@ def format_json_payload_to_markdown(text: str) -> str:
 
     try:
         data = json.loads(clean_text)
-        # Skip if it is a tool call invocation dictionary
-        if isinstance(data, dict) and ("name" in data or "tool" in data or "action" in data) and ("arguments" in data or "parameters" in data or "args" in data):
-            return text
 
         items: list[str] = []
         header = ""
@@ -228,29 +253,31 @@ def format_json_payload_to_markdown(text: str) -> str:
                 else:
                     items.append(f"- {entry}")
             header = "The items are:"
+            if items:
+                return (header + "\n\n" if header else "") + "\n".join(items)
+
         elif isinstance(data, dict):
-            # Check for standard list container keys (e.g. issues, projects, values, items, repositories)
-            for k in ("issues", "projects", "repositories", "values", "items", "results"):
-                v = data.get(k)
-                if isinstance(v, list):
-                    header = f"The {k} are:"
-                    for entry in v:
+            lists = _find_lists_in_dict(data)
+            if lists:
+                all_formatted = []
+                for key_name, lst in lists:
+                    list_items = []
+                    for entry in lst:
                         if isinstance(entry, dict):
-                            items.append(_format_dict_entry(entry))
+                            list_items.append(_format_dict_entry(entry))
                         elif isinstance(entry, (str, int, float)):
-                            items.append(f"- **{entry}**")
+                            list_items.append(f"- **{entry}**")
                         else:
-                            items.append(f"- {entry}")
-                    break
+                            list_items.append(f"- {entry}")
+                    if list_items:
+                        header_title = f"The {key_name} are:"
+                        all_formatted.append(header_title + "\n\n" + "\n".join(list_items))
+                if all_formatted:
+                    return "\n\n".join(all_formatted)
 
-            if not items:
-                # Single item dictionary (e.g. single Jira issue or project detail)
-                if "key" in data or "summary" in data or "fields" in data:
-                    header = "Details:"
-                    items.append(_format_dict_entry(data))
-
-        if items:
-            return (header + "\n\n" if header else "") + "\n".join(items)
+            # If no lists were found, check if it's a single item dictionary
+            if "key" in data or "summary" in data or "fields" in data or "name" in data:
+                return "Details:\n\n" + _format_dict_entry(data)
     except Exception:
         pass
 
