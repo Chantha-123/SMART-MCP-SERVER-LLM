@@ -442,7 +442,8 @@ class BaseAgent:
             f"You are a helpful assistant with access to the following tools: {tool_names_str}.\n"
             "CRITICAL TOOL INSTRUCTION: You MUST ONLY call tools explicitly listed in the available tools above. "
             "Never attempt to call or invent any unlisted tools (such as brave_search, web_search, python, etc.). "
-            "If none of the available tools fit the request, answer directly in plain text without making any tool calls."
+            "If none of the available tools fit the request, answer directly in plain text without making any tool calls.\n"
+            "RESPONSE FORMATTING INSTRUCTION: Always present tool results and lists of items (such as repositories, issues, messages, or channels) to the user using clean human-readable Markdown with bullet points or numbered lists. NEVER output raw JSON objects, JSON arrays, or unformatted API payloads directly as your final answer unless the user explicitly requested JSON."
             f"{extra_instructions}"
         )
 
