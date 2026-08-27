@@ -1,3 +1,3 @@
 """LLM provider modules for MCP agents."""
 
-__all__ = ["gemini", "groq_llm", "openai", "ollama"]
+__all__ = ["gemini", "groq_llm", "openai", "ollama", "zhipu"]

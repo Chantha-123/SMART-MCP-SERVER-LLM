@@ -64,6 +64,8 @@ class ActiveAgent:
                 os.environ["OPENAI_API_KEY"] = api_key.strip()
             elif provider == "groq" and api_key and api_key.strip():
                 os.environ["GROQ_API_KEY"] = api_key.strip()
+            elif provider == "zhipu" and api_key and api_key.strip():
+                os.environ["ZHIPUAI_API_KEY"] = api_key.strip()
             elif provider == "ollama":
                 os.environ["OLLAMA_BASE_URL"] = api_key.strip() if (api_key and api_key.strip()) else os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
@@ -102,20 +104,22 @@ class ToolQueryRequest(BaseModel):
 async def get_config():
     # Read currently configured variables in .env
     return {
-        "providers": ["gemini", "openai", "groq", "ollama"],
+        "providers": ["gemini", "openai", "groq", "ollama", "zhipu"],
         "agents": list(AGENT_BUILDERS.keys()),
         "current_provider": os.getenv("LLM_PROVIDER", "gemini"),
         "models": {
             "gemini": os.getenv("GEMINI_MODEL", "models/gemini-3.1-flash-lite"),
             "openai": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             "groq": os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
-            "ollama": os.getenv("OLLAMA_MODEL", "qwen2.5-coder:14b")
+            "ollama": os.getenv("OLLAMA_MODEL", get_default_ollama_model()),
+            "zhipu": os.getenv("ZHIPUAI_MODEL", "glm-4.5-air")
         },
         "api_keys": {
             "gemini": os.getenv("GOOGLE_API_KEY", ""),
             "openai": os.getenv("OPENAI_API_KEY", ""),
             "groq": os.getenv("GROQ_API_KEY", ""),
-            "ollama": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            "ollama": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            "zhipu": os.getenv("ZHIPUAI_API_KEY", "")
         }
     }
 

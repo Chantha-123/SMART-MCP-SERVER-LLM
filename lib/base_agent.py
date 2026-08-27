@@ -79,6 +79,7 @@ def _get_llm_provider():
     from llm_providers import groq_llm
     from llm_providers import openai
     from llm_providers import ollama
+    from llm_providers import zhipu
 
     provider = os.getenv("LLM_PROVIDER", "openai").lower()
 
@@ -90,10 +91,12 @@ def _get_llm_provider():
         return gemini.get_llm
     elif provider == "ollama":
         return ollama.get_llm
+    elif provider == "zhipu":
+        return zhipu.get_llm
     else:
         raise ValueError(
             f"Unsupported LLM_PROVIDER: {provider}. "
-            f"Supported values: 'openai', 'groq', 'gemini', 'ollama'"
+            f"Supported values: 'openai', 'groq', 'gemini', 'ollama', 'zhipu'"
         )
 
 
