@@ -532,6 +532,9 @@ def _matches_tool_name(tool_name: str, enabled_names: set[str]) -> bool:
     return any(stripped == _strip_tool_prefix(en) for en in enabled_names)
 
 
+_RESPONSE_TIME_LINE = re.compile(r"\n*⏱️ \*Response time: [0-9.]+ seconds\*")
+
+
 def sanitize_session_history(
     session_history: list[BaseMessage],
     valid_tool_names: set[str],
@@ -558,6 +561,9 @@ def sanitize_session_history(
                     sanitized.append(AIMessage(content=content, tool_calls=valid_calls))
                 else:
                     sanitized.append(msg)
+            elif isinstance(msg.content, str) and _RESPONSE_TIME_LINE.search(msg.content):
+                # Sessions saved by older versions include the UI timing line; models copy it
+                sanitized.append(AIMessage(content=_RESPONSE_TIME_LINE.sub("", msg.content).rstrip()))
             else:
                 sanitized.append(msg)
         elif isinstance(msg, ToolMessage):
@@ -735,6 +741,8 @@ class BaseAgent:
             "CRITICAL TOOL INSTRUCTION: You MUST ONLY call tools explicitly listed in the available tools above. "
             "Never attempt to call or invent any unlisted tools (such as brave_search, web_search, python, etc.). "
             "If none of the available tools fit the request, answer directly in plain text without making any tool calls.\n"
+            "NEVER claim you sent, created, updated or deleted anything unless a tool call in this conversation "
+            "actually did it and succeeded. If no available tool can do what the user asks, say so plainly.\n"
             "RESPONSE FORMATTING INSTRUCTION: Always present tool results and lists of items (such as repositories, issues, messages, or channels) to the user using clean human-readable Markdown with bullet points or numbered lists. NEVER output raw JSON objects, JSON arrays, or unformatted API payloads directly as your final answer unless the user explicitly requested JSON."
             f"{extra_instructions}"
         )

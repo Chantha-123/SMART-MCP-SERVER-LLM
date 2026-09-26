@@ -221,12 +221,13 @@ async def chat_endpoint(req: ChatRequest):
         last_ai_msg = await stream_agent_response(agent_wrapper.state, session_history)
         elapsed_time = time.perf_counter() - start_time
         
-        # Format response to include elapsed time
+        # History keeps the plain answer; the timing is only added to what the UI shows,
+        # otherwise the model reads (and imitates) old timing lines on later turns
         text_response = extract_message_text(last_ai_msg)
-        text_response += f"\n\n⏱️ *Response time: {elapsed_time:.2f} seconds*"
         last_ai_msg.content = text_response
-        
         agent_wrapper.state.record_message(req.session_id, last_ai_msg)
+
+        text_response += f"\n\n⏱️ *Response time: {elapsed_time:.2f} seconds*"
         return ChatResponse(response=text_response, session_id=req.session_id)
     except Exception as e:
         agent_wrapper.state.pop_last_message(req.session_id)

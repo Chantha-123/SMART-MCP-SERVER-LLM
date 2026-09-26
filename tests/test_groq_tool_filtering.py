@@ -84,3 +84,12 @@ def test_matches_tool_name_is_exact_not_substring():
     assert _matches_tool_name("jira_search_projects", enabled) is False
     assert _matches_tool_name("jira_get_issue_sla", enabled) is False
     assert _matches_tool_name("jira_get_issue_watchers", enabled) is False
+
+
+def test_old_timing_lines_are_removed_from_history():
+    history = [
+        HumanMessage(content="hi"),
+        AIMessage(content="Hello!\n\n⏱️ *Response time: 11.28 seconds*"),
+    ]
+    cleaned = sanitize_session_history(history, set())
+    assert cleaned[1].content == "Hello!"
