@@ -426,6 +426,38 @@ def compact_tool_output(result: Any) -> Any:
     return result
 
 
+_WRITE_REQUEST = re.compile(
+    r"\b(send|post|reply|create|update|delete|remove|assign|comment|transition|close|edit|write)\b",
+    re.IGNORECASE,
+)
+_WRITE_TOOL = re.compile(
+    r"(add|create|update|delete|remove|send|post|assign|transition|comment|write|edit|move|link)",
+    re.IGNORECASE,
+)
+
+
+def _last_human_text(history: list[BaseMessage]) -> str:
+    for message in reversed(history):
+        if isinstance(message, HumanMessage):
+            return message.content if isinstance(message.content, str) else ""
+    return ""
+
+
+def _needs_write_tool(history: list[BaseMessage], state: RuntimeState) -> bool:
+    """True if the user asks for an action and the agent has a tool that can do it."""
+    if not _WRITE_REQUEST.search(_last_human_text(history)):
+        return False
+    return any(_WRITE_TOOL.search(name) for name in state.tool_map)
+
+
+def _called_write_tool(messages: list[BaseMessage], history_len: int) -> bool:
+    """Whether this turn ran a write tool (its result, success or error, is in the messages)."""
+    return any(
+        isinstance(message, ToolMessage) and _WRITE_TOOL.search(message.name or "")
+        for message in messages[history_len:]
+    )
+
+
 _LISTING_REQUEST = re.compile(r"\b(list|show|search|find|get all|display)\b", re.IGNORECASE)
 
 
@@ -825,6 +857,22 @@ async def stream_agent_response(
             direct = _direct_list_answer(result.get("messages", []), len(sanitized_history))
             if direct is not None:
                 return direct
+
+    # Small models sometimes answer "I have sent the message" without calling any tool.
+    # For write requests, insist once on a real tool call, and never report a fake success.
+    if _needs_write_tool(sanitized_history, state) and not _called_write_tool(result.get("messages", []), len(sanitized_history)):
+        logger.info("Write request answered without a write tool call; retrying with an explicit instruction")
+        nudge = HumanMessage(content=(
+            "You did not call any tool, so nothing was done. Call the appropriate tool now to perform "
+            "my previous request exactly. Do not answer in text before the tool has run."
+        ))
+        retry_history = sanitized_history + [nudge]
+        result = await executor.ainvoke({"messages": retry_history})
+        if not _called_write_tool(result.get("messages", []), len(retry_history)):
+            return AIMessage(content=(
+                "I couldn't complete that action: no tool was called, so nothing was sent or changed. "
+                "Please try again, for example: Send \"Good morning team\" to #channel-name"
+            ))
 
     # Extract the last AI message from the result
     messages = result.get("messages", [])
