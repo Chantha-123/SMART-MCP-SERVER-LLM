@@ -173,7 +173,7 @@ def _format_dict_entry(entry: dict) -> str:
 
     name = entry.get("name") or entry.get("full_name") or entry.get("title")
     summary = entry.get("summary") or fields.get("summary") or entry.get("description") or fields.get("description")
-    url = entry.get("html_url") or entry.get("url") or fields.get("html_url") or fields.get("url")
+    url = entry.get("html_url") or entry.get("browse_url") or entry.get("url") or fields.get("html_url") or fields.get("url")
 
     raw_status = entry.get("status") or fields.get("status")
     status_str = ""

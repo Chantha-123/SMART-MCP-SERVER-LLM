@@ -1,4 +1,5 @@
 import os
+import shutil
 from typing import Any
 from lib.base_agent import BaseAgent
 from lib.base_transport import StdioTransportMixin, HttpTransportMixin
@@ -94,10 +95,17 @@ def _create_stdio_agent(required_vars: list[str]) -> BaseAgent:
                 if value:
                     env[var] = value
             
-            args = ["-y", "slack-mcp-server@latest", "--transport", "stdio"]
+            server_args = ["--transport", "stdio"]
             if os.getenv("SLACK_MCP_NO_CACHE") == "true":
-                args.append("--no-cache")
-            
+                server_args.append("--no-cache")
+
+            # Pre-installed binary (Docker image) avoids npx checking the registry on every launch
+            installed = shutil.which("slack-mcp-server")
+            if installed:
+                return self.build_stdio_config(installed, server_args, env)
+
+            args = ["-y", "slack-mcp-server@latest", *server_args]
+
             # Use npx with -y flag to auto-confirm install
             return self.build_stdio_config(
                 "npx",

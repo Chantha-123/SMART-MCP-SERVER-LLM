@@ -7,6 +7,11 @@ from langchain_core.language_models import BaseChatModel
 
 logger = logging.getLogger(__name__)
 
+
+def get_default_ollama_model() -> str:
+    return "llama3.2"
+
+
 # Track pulling tasks in progress to avoid double-pulling
 _pulling_models = set()
 
@@ -62,9 +67,26 @@ def ensure_model_pulled(base_url: str, model_name: str):
             daemon=True
         ).start()
 
+def warm_up_model(base_url: str, model_name: str):
+    """Load the model into memory in the background so the first chat doesn't pay the load cost."""
+    def _warm_up():
+        try:
+            # An empty prompt makes Ollama load the model without generating anything
+            requests.post(
+                f"{base_url}/api/generate",
+                json={"model": model_name, "keep_alive": os.getenv("OLLAMA_KEEP_ALIVE", "24h")},
+                timeout=300,
+            )
+            logger.info(f"Ollama model '{model_name}' is loaded and warm.")
+        except Exception as e:
+            logger.warning(f"Could not warm up Ollama model '{model_name}': {e}")
+
+    threading.Thread(target=_warm_up, daemon=True).start()
+
+
 def get_llm() -> BaseChatModel:
     base_url = (os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434").strip()
-    model_id = (os.getenv("OLLAMA_MODEL") or os.getenv("MODEL") or "qwen2.5-coder:14b").strip()
+    model_id = (os.getenv("OLLAMA_MODEL") or os.getenv("MODEL") or get_default_ollama_model()).strip()
     
     if not base_url.startswith("http"):
         base_url = f"http://{base_url}"
@@ -74,11 +96,22 @@ def get_llm() -> BaseChatModel:
         
     # Auto-pull the model if it's not downloaded (handles pulling via background threads)
     ensure_model_pulled(base_url, model_id)
-    
+    warm_up_model(base_url, model_id)
+
+    # Cap generated tokens: without a limit, small local models can loop until
+    # Ollama's context shift, which on CPU means minutes per request.
+    max_tokens = int(os.getenv("OLLAMA_NUM_PREDICT") or 512)
+
     # Return ChatOpenAI configured for Ollama OpenAI compatibility
     return ChatOpenAI(
         model=model_id,
         base_url=f"{base_url}/v1",
         api_key="ollama", # placeholder key for client initialization
-        temperature=0.0
+        temperature=0.0,
+        # ChatOpenAI(max_tokens=...) is sent as `max_completion_tokens`, which Ollama
+        # ignores; `max_tokens` in the request body is what Ollama honors.
+        extra_body={"max_tokens": max_tokens},
+        timeout=float(os.getenv("OLLAMA_REQUEST_TIMEOUT") or 300),
+        # Retrying a timed-out CPU inference only doubles the wait
+        max_retries=0,
     )

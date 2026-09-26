@@ -73,3 +73,14 @@ def test_sanitize_session_history_all_invalid():
     assert isinstance(ai_msg, AIMessage)
     assert len(ai_msg.tool_calls) == 0
     assert ai_msg.content == "[Previous tool call to unlisted tool was omitted]"
+
+
+def test_matches_tool_name_is_exact_not_substring():
+    enabled = {"jira_search", "jira_get_issue"}
+
+    assert _matches_tool_name("jira_search", enabled) is True
+    assert _matches_tool_name("jira_get_issue", enabled) is True
+    # Longer tools sharing a prefix must not be enabled (keeps local-model prompts small)
+    assert _matches_tool_name("jira_search_projects", enabled) is False
+    assert _matches_tool_name("jira_get_issue_sla", enabled) is False
+    assert _matches_tool_name("jira_get_issue_watchers", enabled) is False

@@ -38,7 +38,7 @@ import subprocess
 
 @mcp.tool()
 def fetch_web_page(url: str) -> str:
-    """Fetch and extract text content from a web page URL (e.g. https://www.khmer24.com/en)."""
+    """Fetch and extract text content from a web page URL. Only call this when the user provides or asks about a specific URL."""
     if not url:
         return "Error: URL parameter is empty."
     

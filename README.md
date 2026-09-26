@@ -10,7 +10,7 @@ pinned: false
 
 # Community AI MCP Agent & Dashboard
 
-A unified AI Agent platform with a Web Dashboard and CLI for interacting with GitHub, Slack, Jira, Telegram, Google Chat, and Web Scraping using the Model Context Protocol (MCP) and LangChain/LangGraph. Supports Gemini, Groq, OpenAI, and local Ollama.
+A unified AI Agent platform with a Web Dashboard and CLI for interacting with GitHub, Slack, Jira, and Web Scraping using the Model Context Protocol (MCP) and LangChain/LangGraph. Supports Gemini, Groq, OpenAI, and local Ollama.
 
 ---
 
@@ -19,7 +19,6 @@ A unified AI Agent platform with a Web Dashboard and CLI for interacting with Gi
 - **GitHub Agent**: Repository management, issues, PRs, and code operations.
 - **Slack Agent**: Channel management, messaging, and workspace interactions.
 - **Jira Agent**: Issue tracking, project management, and workflow automation.
-- **Telegram & Google Chat Agents**: Community chat integrations.
 - **Web Reader Agent**: Web page scraping and URL reading.
 - **Multi-LLM Support**: Works with Gemini, Groq, OpenAI, and local Ollama models.
 - **Web Dashboard & CLI**: Full interactive browser UI and terminal CLI interface.
@@ -172,6 +171,32 @@ Docker on macOS cannot directly access Apple Silicon GPU hardware (Metal). For m
 
 ---
 
+### ⚡ Local Model Performance (Docker + Ollama)
+
+On CPU-only machines, prompt processing is the bottleneck (~20 tokens/s on a low-power laptop CPU), so every 1,000 tokens of tool output adds ~50 s. The compose setup is tuned for this:
+
+| Setting | Where | Default | Why |
+|---|---|---|---|
+| `OLLAMA_KEEP_ALIVE` | ollama + web | `24h` | Keeps the model in RAM (a cold load can take ~45 s). The web app also warms the model up on init. |
+| `OLLAMA_CONTEXT_LENGTH` | ollama | `8192` | Ollama's default 4096 is too small for tool schemas + tool results. |
+| `OLLAMA_NUM_PARALLEL` / `OLLAMA_MAX_LOADED_MODELS` | ollama | `1` | All CPU/RAM goes to one request; the stable system prompt stays prompt-cached. |
+| `OLLAMA_NUM_PREDICT` | web | `512` | Caps generated tokens (~6 tokens/s on CPU, so 512 ≈ 90 s worst case). Without it a looping small model can run for 10+ minutes. |
+| `LOCAL_TOOL_OUTPUT_MAX_BYTES` | web | `4000` | Tool results are minified (noise fields like avatars/IDs dropped) and capped before the model reads them. JSON lists are cut by whole items and say how many were left out; the budget is UTF-8 bytes so non-Latin text like Khmer is counted fairly. |
+| `LOCAL_HISTORY_MAX_TURNS` | web | `6` | Only the most recent user turns are sent to the model. |
+| `LOCAL_DIRECT_LIST_ANSWERS` | web | `true` | For "list / show / search / find" questions, the tool result is formatted directly instead of a second LLM pass (~5 s instead of ~90 s). Other questions still go through the model. |
+| `MCP_PRECONNECT` | web | `true` | Starts every agent's MCP server at startup and keeps one session open (no process spawn per tool call). With `LLM_PROVIDER=ollama` it also pre-fills the prompt cache, so the first question to each agent skips ~30-40 s of prompt reading. |
+
+All of these can be overridden in `.env`. The `LOCAL_*` settings and `OLLAMA_NUM_PREDICT` apply only when the provider is `ollama`.
+
+**Model choice matters most.** Small models differ a lot in tool calling. In our tests `qwen2.5:3b` answered greetings directly and only called tools when needed, while `llama3.2` (3B) called a tool for almost every message (e.g. fetching google.com for "hello"). Models larger than your Docker memory limit (e.g. `qwen2.5-coder:14b` ≈ 9 GB) will not load.
+
+**NVIDIA GPU** (enables GPU plus flash attention and a q8 KV cache; these were slower on CPU-only):
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+```
+
+---
+
 ## 💻 CLI Usage
 
 You can also run agents directly in your command line:
@@ -199,7 +224,7 @@ This project is configured with an **All-In-One Dockerfile** that runs both the 
 **Benefits**:
 - **0 Load on your Mac**: Runs 100% in the cloud.
 - **$0 Cost**: Uses Hugging Face's free Docker Space tier.
-- **Pre-loaded Model**: Automatically installs and pulls `qwen2.5-coder:14b` inside the container.
+- **Pre-loaded Model**: Automatically pulls `qwen2.5:3b` inside the container (fast on CPU, reliable tool calling). Ollama is the default provider.
 
 ---
 
@@ -231,10 +256,19 @@ git push hf main
 
 ---
 
+### Step 2b: Add Secrets and Variables
+`.env` is not uploaded (it's in `.dockerignore`). In the Space go to **Settings → Variables and secrets** and add:
+- **Secrets**: `GITHUB_PERSONAL_ACCESS_TOKEN`, `JIRA_URL`, `JIRA_USERNAME`, `JIRA_API_TOKEN`, `SLACK_MCP_XOXP_TOKEN` (and `GOOGLE_API_KEY` / `GROQ_API_KEY` / `OPENAI_API_KEY` if you use cloud providers).
+- **Variables** (optional): `OLLAMA_MODEL` or `LLM_PROVIDER` to change the defaults (`qwen2.5:3b` / `ollama`).
+
+**Speed note:** the free `CPU basic` Space has only 2 vCPUs, so the local model is several times slower than on a typical laptop, and a sleeping Space re-downloads the model when it wakes. For a fast public demo, pick GPU hardware for the Space or use a cloud provider (Gemini/Groq) from the dashboard.
+
+---
+
 ### Step 3: Access your Live App
 1. Go to your Space page on Hugging Face: [https://huggingface.co/spaces/ActiveProgrammar/Asssingment_LLM](https://huggingface.co/spaces/ActiveProgrammar/Asssingment_LLM)
 2. Click the **App** tab.
-3. Hugging Face will build the Docker container, start Ollama, download `qwen2.5-coder:14b`, and launch the Web Dashboard automatically.
+3. Hugging Face will build the Docker container, start Ollama, download `qwen2.5:3b`, and launch the Web Dashboard automatically.
 4. Select **Ollama** as provider and start chatting for **$0 cost**!
 
 ---
@@ -268,7 +302,6 @@ community_mcp_servers/
 │   ├── github_agent.py
 │   ├── jira_agent.py
 │   ├── slack_agent.py
-│   ├── telegram_agent.py
 │   └── web_agent.py
 ├── lib/                 # Core MCP library & transports
 │   ├── base_agent.py   # Base agent executor

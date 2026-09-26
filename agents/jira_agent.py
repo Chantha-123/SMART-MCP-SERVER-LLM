@@ -1,4 +1,5 @@
 import os
+import shutil
 from typing import Any
 from lib.base_agent import BaseAgent
 from lib.base_transport import StdioTransportMixin, HttpTransportMixin
@@ -132,6 +133,12 @@ def _create_stdio_agent(required_vars: list[str]) -> BaseAgent:
                 if value:
                     env[var] = value
             
+            # Pre-installed binary (Docker image) starts in seconds instead of resolving
+            # the package on every launch
+            installed = shutil.which("mcp-atlassian")
+            if installed:
+                return self.build_stdio_config(installed, [], env)
+
             # Use uv run to run mcp-atlassian to bypass macOS realpath bugs in uvx
             return self.build_stdio_config(
                 "uv",

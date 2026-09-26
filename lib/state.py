@@ -132,6 +132,11 @@ class RuntimeState:
         self.service_name = service_name
         self.agent_executor: Any = None
         self.mcp_client: Any | None = None
+        self.mcp_session: Any | None = None  # PersistentMCPSession
+        self.mcp_tools: list[Any] = []
+        self.llm: Any = None
+        self.agent_tools: list[Any] = []
+        self.system_prompt: str = ""
         self.chat_sessions: dict[str, list[BaseMessage]] = {}
         self.session_metadata: dict[str, dict[str, Any]] = {}
         self.tool_summaries: list[dict[str, object]] = []

@@ -1,0 +1,16 @@
+# Optional NVIDIA GPU acceleration for Ollama (requires NVIDIA drivers +
+# Docker Desktop WSL2 GPU support or nvidia-container-toolkit on Linux):
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+services:
+  ollama:
+    environment:
+      # Flash attention + 8-bit KV cache pay off on GPU (they were slower on CPU-only)
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
