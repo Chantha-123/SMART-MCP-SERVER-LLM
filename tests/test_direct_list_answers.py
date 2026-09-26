@@ -3,7 +3,7 @@ import unittest
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from lib.base_agent import _asks_for_listing, _direct_list_answer, truncate_tool_output
+from lib.base_agent import _asks_for_listing, _direct_list_answer, compact_tool_output, truncate_tool_output
 
 
 def _turn(tool_content: str) -> list:
@@ -61,6 +61,34 @@ class JsonAwareTruncationTests(unittest.TestCase):
         answer = _direct_list_answer(turn, history_len=1)
         self.assertIn("A-9", answer.content)
         self.assertNotIn("more not shown", answer.content)
+
+
+class SlackCsvTests(unittest.TestCase):
+    def test_header_only_csv_becomes_explicit_empty_result(self) -> None:
+        empty = "MsgID,UserID,UserName,RealName,Channel,ThreadTs,Text,Time,Permalink,Cursor\n"
+        self.assertIn("No results found", compact_tool_output(empty))
+        self.assertIn("No results found", compact_tool_output("[]"))
+        self.assertIn("No results found", compact_tool_output(json.dumps({"total": 0, "issues": []})))
+
+    def test_csv_listing_is_answered_directly(self) -> None:
+        channels = (
+            "ID,Name,Topic,Purpose,MemberCount,Cursor\n"
+            "C1,#social,,Just for fun,2,\n"
+            "C2,#new-channel,,Team meetings,2,\n"
+        )
+        turn = _turn(channels)
+        turn[0] = HumanMessage(content="List my slack channels")
+        answer = _direct_list_answer(turn, history_len=1)
+        self.assertIn("**#social**: Just for fun", answer.content)
+        self.assertIn("**#new-channel**", answer.content)
+
+    def test_csv_messages_show_author_time_and_text(self) -> None:
+        history = (
+            "MsgID,UserID,UserName,RealName,Channel,Text,Time,Cursor\n"
+            "1.1,U1,bun,Bun Chantha,C2,Hello,2026-07-13T16:59:43Z,\n"
+        )
+        answer = _direct_list_answer(_turn(history), history_len=1)
+        self.assertIn("**Bun Chantha** (2026-07-13T16:59:43Z): Hello", answer.content)
 
 
 if __name__ == "__main__":

@@ -36,6 +36,7 @@ from .mcp_session import PersistentMCPSession
 from .state import RuntimeState
 from .utils import (
     build_connection_config,
+    format_csv_payload_to_markdown,
     format_json_payload_to_markdown,
     sanitize_tool_name,
     schema_from_model,
@@ -377,14 +378,33 @@ def _compact_json(value: Any) -> Any:
     return value
 
 
+_EMPTY_RESULT = "No results found (the tool returned an empty list)."
+_CSV_HEADER = re.compile(r"^[A-Za-z_][A-Za-z0-9_ ]*(,[A-Za-z_][A-Za-z0-9_ ]*)+$")
+
+
+def _all_lists(value: Any) -> list[list[Any]]:
+    if isinstance(value, list):
+        return [value]
+    if isinstance(value, dict):
+        return [found for item in value.values() for found in _all_lists(item)]
+    return []
+
+
 def _compact_text(text: str) -> str:
     stripped = text.strip()
+    # A CSV with only its header row (e.g. an empty Slack channel). Small models tend
+    # to invent rows for it, so say explicitly that there is nothing.
+    if "\n" not in stripped and _CSV_HEADER.match(stripped):
+        return _EMPTY_RESULT
     if not stripped.startswith(("{", "[")):
         return text
     try:
         data = json.loads(stripped)
     except ValueError:
         return text
+    lists = _all_lists(data)
+    if lists and all(not items for items in lists):
+        return _EMPTY_RESULT
     return json.dumps(_compact_json(data), ensure_ascii=False, separators=(",", ":"))
 
 
@@ -464,7 +484,9 @@ def _direct_list_answer(messages: list[BaseMessage], history_len: int) -> AIMess
         if not isinstance(content, str):
             return None
         text, omitted_note = _pop_omitted_note(content)
-        formatted = format_json_payload_to_markdown(text)
+        formatted = format_csv_payload_to_markdown(text)
+        if formatted == text:
+            formatted = format_json_payload_to_markdown(text)
         # Only lists ("The <items> are:"); errors, prose and single-item details go to the LLM
         if formatted == text or not formatted.startswith("The "):
             return None

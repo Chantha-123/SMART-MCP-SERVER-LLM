@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import os
 import sys
@@ -282,6 +284,43 @@ def format_json_payload_to_markdown(text: str) -> str:
         pass
 
     return text
+
+
+_CSV_TITLE_COLUMNS = ("Name", "RealName", "UserName", "Title", "Key")
+_CSV_DETAIL_COLUMNS = ("Text", "Purpose", "Topic", "Description", "Summary")
+
+
+def format_csv_payload_to_markdown(text: str) -> str:
+    """Format a CSV tool payload (e.g. Slack channels or messages) as a Markdown list.
+
+    Returns the text unchanged if it isn't a CSV with a header and at least one row.
+    """
+    if not isinstance(text, str) or "\n" not in text.strip() or text.lstrip().startswith(("{", "[")):
+        return text
+    try:
+        rows = list(csv.DictReader(io.StringIO(text.strip())))
+    except csv.Error:
+        return text
+    if not rows or not rows[0]:
+        return text
+    columns = rows[0].keys()
+    title_col = next((c for c in _CSV_TITLE_COLUMNS if c in columns), None)
+    detail_cols = [c for c in _CSV_DETAIL_COLUMNS if c in columns]
+    if not title_col and not detail_cols:
+        return text
+
+    items = []
+    for row in rows:
+        title = (row.get(title_col) or "").strip() if title_col else ""
+        detail = next(((row.get(c) or "").strip() for c in detail_cols if (row.get(c) or "").strip()), "")
+        when = (row.get("Time") or "").strip()
+        line = f"- **{title}**" if title else "-"
+        if when:
+            line += f" ({when})"
+        if detail:
+            line += f": {detail}" if title else f" {detail}"
+        items.append(line)
+    return "The results are:\n\n" + "\n".join(items)
 
 
 def extract_message_text(message: BaseMessage) -> str:

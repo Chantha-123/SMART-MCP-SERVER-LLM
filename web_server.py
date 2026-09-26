@@ -163,14 +163,26 @@ async def get_config():
         }
     }
 
+def _leaf_errors(e: BaseException) -> list[BaseException]:
+    """Unwrap (nested) ExceptionGroups from anyio/asyncio TaskGroups down to the real errors."""
+    subs = getattr(e, "exceptions", None)
+    if not subs:
+        return [e]
+    return [leaf for sub in subs for leaf in _leaf_errors(sub)]
+
+
 def format_init_error(e: Exception) -> str:
-    err_msg = str(e)
-    # Extract sub-exceptions if it is an ExceptionGroup (common with asyncio TaskGroups)
-    if hasattr(e, "exceptions"):
-        sub_errs = [str(x) for x in getattr(e, "exceptions", [])]
-        if sub_errs:
-            err_msg = f"{err_msg} -> {'; '.join(sub_errs)}"
-            
+    leaves = _leaf_errors(e)
+    err_msg = "; ".join(str(x) or type(x).__name__ for x in leaves)
+
+    # A stdio MCP server that exits during startup only surfaces as "Connection closed";
+    # its own error (bad token, missing permission) is printed to the container log
+    if any("connection closed" in str(x).lower() for x in leaves):
+        err_msg += (
+            " (The MCP server stopped during startup, usually because of an invalid token or"
+            " missing permissions. Its error is in the logs: docker logs community_mcp_web)"
+        )
+
     # Provide helpful suggestion for GitHub Copilot 401 Unauthorized errors
     if "401" in err_msg and "githubcopilot" in err_msg.lower():
         err_msg += " (Authentication failed for GitHub Copilot. Your personal access token may not have Copilot access. To run a standard GitHub server instead, add 'GITHUB_MCP_TRANSPORT=stdio' to your .env file)"
