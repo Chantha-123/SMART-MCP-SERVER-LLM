@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from typing import Dict, Any, List
 
 from lib.state import RuntimeState
-from lib.base_agent import ensure_agent_initialized, stream_agent_response
+from lib.base_agent import RESPONSE_TIME_LINE, ensure_agent_initialized, stream_agent_response
 from agents import get_github_agent, get_jira_agent, get_slack_agent, get_web_agent
 from langchain_core.messages import HumanMessage, AIMessage
 from lib.utils import extract_message_text
@@ -39,6 +39,23 @@ AGENT_BUILDERS = {
     "slack": get_slack_agent,
     "web-reader": get_web_agent,
 }
+
+PROVIDER_KEY_ENV = {
+    "gemini": "GOOGLE_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "groq": "GROQ_API_KEY",
+}
+
+# Agent connection state for /api/status: {"state": idle|connecting|ready|error, ...}
+AGENT_STATUS: Dict[str, Dict[str, Any]] = {}
+
+
+def _set_status(agent_name: str, state: str, message: str = "", tools: int | None = None) -> None:
+    status: Dict[str, Any] = {"state": state, "message": message}
+    if tools is not None:
+        status["tools"] = tools
+    AGENT_STATUS[agent_name] = status
+
 
 PROVIDER_MODEL_ENV = {
     "gemini": "GEMINI_MODEL",
@@ -118,11 +135,15 @@ def get_active_agent(agent_name: str) -> ActiveAgent:
 
 async def _preconnect_agent(agent_name: str) -> None:
     start = time.perf_counter()
+    _set_status(agent_name, "connecting", "Starting MCP server…")
     try:
-        await get_active_agent(agent_name).preconnect()
+        active = get_active_agent(agent_name)
+        await active.preconnect()
+        _set_status(agent_name, "ready", "Connected", tools=len(active.state.mcp_tools))
         print(f"[startup] {agent_name}: ready ({time.perf_counter() - start:.1f}s)")
     except Exception as e:
         # Missing credentials etc. — the agent will report the error when used
+        _set_status(agent_name, "error", format_init_error(e))
         print(f"[startup] {agent_name}: not pre-connected ({format_init_error(e)[:200]})")
 
 class ChatRequest(BaseModel):
@@ -136,6 +157,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     session_id: str
+    elapsed_seconds: float | None = None
 
 class ToolQueryRequest(BaseModel):
     provider: str
@@ -155,13 +177,20 @@ async def get_config():
             "groq": os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
             "ollama": os.getenv("OLLAMA_MODEL", get_default_ollama_model()),
         },
-        "api_keys": {
-            "gemini": os.getenv("GOOGLE_API_KEY", ""),
-            "openai": os.getenv("OPENAI_API_KEY", ""),
-            "groq": os.getenv("GROQ_API_KEY", ""),
-            "ollama": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-        }
+        # Never send key values to the browser (the dashboard may be public): only
+        # whether the server has one, so an empty key field means "use the server key"
+        "server_keys": {
+            provider: bool((os.getenv(env_name) or "").strip())
+            for provider, env_name in PROVIDER_KEY_ENV.items()
+        },
+        "ollama_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
     }
+
+
+@app.get("/api/status")
+async def get_status():
+    """Per-agent connection state for the dashboard's status indicators."""
+    return {"agents": {name: AGENT_STATUS.get(name, {"state": "idle"}) for name in AGENT_BUILDERS}}
 
 def _leaf_errors(e: BaseException) -> list[BaseException]:
     """Unwrap (nested) ExceptionGroups from anyio/asyncio TaskGroups down to the real errors."""
@@ -197,9 +226,11 @@ async def get_agent_tools(agent_name: str, req: ToolQueryRequest):
     agent_wrapper = get_active_agent(agent_name)
     try:
         await agent_wrapper.ensure_initialized(req.provider, req.model, req.api_key)
-        return {"tools": agent_wrapper.state.tool_summaries}
     except Exception as e:
+        _set_status(agent_name, "error", format_init_error(e))
         raise HTTPException(status_code=500, detail=f"Failed to load agent tools: {format_init_error(e)}")
+    _set_status(agent_name, "ready", "Connected", tools=len(agent_wrapper.state.tool_summaries))
+    return {"tools": agent_wrapper.state.tool_summaries}
 
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):
@@ -210,6 +241,7 @@ async def chat_endpoint(req: ChatRequest):
     try:
         await agent_wrapper.ensure_initialized(req.provider, req.model, req.api_key)
     except Exception as e:
+        _set_status(req.agent_name, "error", format_init_error(e))
         raise HTTPException(status_code=500, detail=f"Failed to initialize agent: {format_init_error(e)}")
 
     # Record message to history
@@ -221,14 +253,16 @@ async def chat_endpoint(req: ChatRequest):
         last_ai_msg = await stream_agent_response(agent_wrapper.state, session_history)
         elapsed_time = time.perf_counter() - start_time
         
-        # History keeps the plain answer; the timing is only added to what the UI shows,
-        # otherwise the model reads (and imitates) old timing lines on later turns
+        # Timing is returned separately (shown by the UI under the answer), never mixed
+        # into the text: the model would read and imitate it on later turns
         text_response = extract_message_text(last_ai_msg)
         last_ai_msg.content = text_response
         agent_wrapper.state.record_message(req.session_id, last_ai_msg)
-
-        text_response += f"\n\n⏱️ *Response time: {elapsed_time:.2f} seconds*"
-        return ChatResponse(response=text_response, session_id=req.session_id)
+        return ChatResponse(
+            response=text_response,
+            session_id=req.session_id,
+            elapsed_seconds=round(elapsed_time, 2),
+        )
     except Exception as e:
         agent_wrapper.state.pop_last_message(req.session_id)
         err_msg = str(e)
@@ -242,7 +276,14 @@ async def list_agent_sessions(agent_name: str):
     if agent_name not in AGENT_BUILDERS:
         raise HTTPException(status_code=400, detail=f"Unsupported agent: {agent_name}")
     agent_wrapper = get_active_agent(agent_name)
-    return {"sessions": agent_wrapper.state.list_sessions()}
+    sessions = agent_wrapper.state.list_sessions()
+    for session in sessions:
+        # Title for the dashboard's chat list: the first question of the conversation
+        history = agent_wrapper.state.chat_sessions.get(session["session_id"], [])
+        first = next((m for m in history if isinstance(m, HumanMessage)), None)
+        title = first.content if first is not None and isinstance(first.content, str) else ""
+        session["title"] = (title[:60] + "…") if len(title) > 60 else (title or "New chat")
+    return {"sessions": sessions}
 
 @app.delete("/api/sessions/{agent_name}/{session_id}")
 async def delete_agent_session(agent_name: str, session_id: str):
@@ -268,6 +309,9 @@ async def get_session_messages(agent_name: str, session_id: str):
         data = msg.get("data", {})
         content = data.get("content", "")
         if msg_type in ("human", "ai") and content:
+            if msg_type == "ai" and isinstance(content, str):
+                # Answers saved by older versions carry the timing line in their text
+                content = RESPONSE_TIME_LINE.sub("", content).rstrip()
             formatted.append({
                 "sender": "user" if msg_type == "human" else "agent",
                 "text": content

@@ -3,933 +3,596 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MCP Agent Dashboard</title>
-    <!-- Google Fonts: Plus Jakarta Sans -->
+    <title>MCP Agent Console</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <!-- FontAwesome for Premium Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Marked.js for Premium Markdown Rendering -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Pinned versions: Markdown rendering + HTML sanitizing of agent answers -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+    <script>
+        // Apply the saved theme before first paint (no light/dark flash)
+        (function () {
+            let theme = null;
+            try { theme = localStorage.getItem('mcp.theme'); } catch (e) {}
+            if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+        })();
+    </script>
     <style>
+        /* ---------- Design tokens ---------- */
         :root {
-            --bg-base: hsl(240, 20%, 8%);
-            --bg-surface: hsl(240, 15%, 12%);
-            --bg-card: hsla(240, 15%, 15%, 0.7);
-            --border-color: hsla(240, 15%, 25%, 0.6);
-            --border-hover: hsla(262, 80%, 60%, 0.4);
-            
-            --primary: hsl(262, 80%, 60%);
-            --primary-hover: hsl(262, 80%, 50%);
-            --primary-glow: hsla(262, 80%, 60%, 0.25);
-            
-            --accent: hsl(190, 90%, 50%);
-            --accent-glow: hsla(190, 90%, 50%, 0.2);
-            
-            --text-main: hsl(0, 0%, 96%);
-            --text-muted: hsl(240, 10%, 70%);
-            --text-dim: hsl(240, 8%, 50%);
-            
-            --success: hsl(142, 70%, 50%);
-            --error: hsl(0, 85%, 60%);
-            
-            --sidebar-width: 320px;
-            --header-height: 70px;
-            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --bg: #f7f8fa;
+            --surface: #ffffff;
+            --surface-2: #f1f3f6;
+            --surface-hover: #eceff3;
+            --border: #e3e6eb;
+            --border-strong: #cfd4dc;
+            --text: #16181d;
+            --text-muted: #5b6270;
+            --text-dim: #8a909c;
+            --accent: #2563eb;
+            --accent-hover: #1d4ed8;
+            --accent-soft: #e8efff;
+            --accent-text: #ffffff;
+            --success: #16a34a;
+            --success-soft: #e7f6ec;
+            --warning: #d97706;
+            --warning-soft: #fdf3e2;
+            --danger: #dc2626;
+            --danger-soft: #fdecec;
+            --code-bg: #f3f4f7;
+            --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+            --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
+            --radius: 10px;
+            --radius-sm: 7px;
+            --sidebar-width: 288px;
+            --header-height: 60px;
+            color-scheme: light;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --bg: #0f1115;
+                --surface: #161920;
+                --surface-2: #1c2029;
+                --surface-hover: #222733;
+                --border: #262b36;
+                --border-strong: #343b49;
+                --text: #e8eaee;
+                --text-muted: #a3aab7;
+                --text-dim: #737b89;
+                --accent: #4f8cff;
+                --accent-hover: #6b9dff;
+                --accent-soft: #1b2a47;
+                --accent-text: #ffffff;
+                --success: #3fb96a;
+                --success-soft: #16291e;
+                --warning: #e9a23b;
+                --warning-soft: #2e2414;
+                --danger: #f05252;
+                --danger-soft: #331a1c;
+                --code-bg: #1b1f27;
+                --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+                --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.35);
+                color-scheme: dark;
+            }
+        }
+        :root[data-theme="dark"] {
+            --bg: #0f1115;
+            --surface: #161920;
+            --surface-2: #1c2029;
+            --surface-hover: #222733;
+            --border: #262b36;
+            --border-strong: #343b49;
+            --text: #e8eaee;
+            --text-muted: #a3aab7;
+            --text-dim: #737b89;
+            --accent: #4f8cff;
+            --accent-hover: #6b9dff;
+            --accent-soft: #1b2a47;
+            --accent-text: #ffffff;
+            --success: #3fb96a;
+            --success-soft: #16291e;
+            --warning: #e9a23b;
+            --warning-soft: #2e2414;
+            --danger: #f05252;
+            --danger-soft: #331a1c;
+            --code-bg: #1b1f27;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.35);
+            color-scheme: dark;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            scrollbar-width: thin;
-            scrollbar-color: var(--border-color) transparent;
-        }
-
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--primary);
-        }
-
+        /* ---------- Base ---------- */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
         body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: var(--bg-base);
-            color: var(--text-main);
-            height: 100vh;
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+            background: var(--bg);
+            color: var(--text);
             overflow: hidden;
-            display: flex;
+            -webkit-font-smoothing: antialiased;
         }
+        button, input, select, textarea { font: inherit; color: inherit; }
+        button { cursor: pointer; }
+        :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        [hidden] { display: none !important; }
+        .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
-        /* App Container */
-        .app-container {
-            display: flex;
-            width: 100vw;
-            height: 100vh;
-            position: relative;
-        }
+        .app { display: flex; height: 100vh; height: 100dvh; }
 
-        /* Sidebar Design */
+        /* ---------- Sidebar ---------- */
         .sidebar {
             width: var(--sidebar-width);
-            background-color: var(--bg-surface);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            height: 100%;
             flex-shrink: 0;
-            z-index: 10;
-        }
-
-        .sidebar-header {
-            padding: 24px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .logo-icon {
-            background: linear-gradient(135deg, var(--primary), var(--accent));
-            width: 36px;
-            height: 36px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.1rem;
-            box-shadow: 0 4px 15px var(--primary-glow);
-        }
-
-        .logo-text h1 {
-            font-size: 1.15rem;
-            font-weight: 800;
-            letter-spacing: 0.5px;
-            background: linear-gradient(to right, #fff, var(--text-muted));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .logo-text span {
-            font-size: 0.75rem;
-            color: var(--accent);
-            text-transform: uppercase;
-            font-weight: 700;
-            letter-spacing: 1px;
-        }
-
-        .sidebar-content {
-            padding: 20px;
             display: flex;
             flex-direction: column;
-            gap: 24px;
-            overflow-y: auto;
-            flex-grow: 1;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            min-height: 0;
         }
-
-        .section-title {
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: var(--text-dim);
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        /* Form Controls */
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-bottom: 16px;
-        }
-
-        .form-label {
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--text-muted);
-        }
-
-        .select-input, .text-input {
-            width: 100%;
-            background-color: var(--bg-base);
-            border: 1px solid var(--border-color);
-            color: var(--text-main);
-            padding: 12px 16px;
-            border-radius: 10px;
-            font-family: inherit;
-            font-size: 0.9rem;
-            outline: none;
-            transition: var(--transition-smooth);
-        }
-
-        .select-input:focus, .text-input:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 10px var(--primary-glow);
-        }
-
-        .api-key-container {
-            position: relative;
-        }
-
-        .api-key-toggle {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-dim);
-            cursor: pointer;
-            transition: var(--transition-smooth);
-        }
-
-        .api-key-toggle:hover {
-            color: var(--text-main);
-        }
-
-        /* Agent Cards */
-        .agent-list {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .agent-card {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 14px 16px;
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            cursor: pointer;
-            transition: var(--transition-smooth);
-        }
-
-        .agent-card:hover {
-            border-color: var(--border-hover);
-            background-color: hsla(240, 15%, 18%, 0.8);
-            transform: translateY(-1px);
-        }
-
-        .agent-card.active {
-            border-color: var(--primary);
-            background: linear-gradient(135deg, hsla(262, 80%, 60%, 0.1), hsla(240, 15%, 15%, 0.7));
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2), inset 0 0 8px rgba(138, 43, 226, 0.15);
-        }
-
-        .agent-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            background-color: var(--bg-base);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.15rem;
-            color: var(--text-muted);
-            transition: var(--transition-smooth);
-        }
-
-        .agent-card.active .agent-icon {
-            background-color: var(--primary);
-            color: white;
-            box-shadow: 0 0 10px var(--primary-glow);
-        }
-
-        .agent-info {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .agent-name {
-            font-size: 0.9rem;
-            font-weight: 600;
-            text-transform: capitalize;
-        }
-
-        .agent-desc {
-            font-size: 0.72rem;
-            color: var(--text-dim);
-        }
-
-        /* Tools Inspector */
-        .tools-inspector {
-            padding: 20px;
-            border-top: 1px solid var(--border-color);
-            background-color: hsl(240, 15%, 10%);
-        }
-
-        .tools-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 12px;
-        }
-
-        .tool-count {
-            font-size: 0.75rem;
-            padding: 2px 8px;
-            background-color: var(--bg-surface);
-            border-radius: 20px;
-            color: var(--accent);
-            border: 1px solid var(--border-color);
-            font-weight: 700;
-        }
-
-        .tools-list-container {
-            max-height: 150px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .tool-badge {
-            background-color: var(--bg-base);
-            border: 1px solid var(--border-color);
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 0.75rem;
-            font-family: 'JetBrains Mono', monospace;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            cursor: help;
-            transition: var(--transition-smooth);
-        }
-
-        .tool-badge:hover {
-            border-color: var(--accent);
-            background-color: hsla(190, 90%, 50%, 0.05);
-        }
-
-        .tool-name {
-            color: var(--accent);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .tool-info-icon {
-            color: var(--text-dim);
-            font-size: 0.7rem;
-        }
-
-        /* Main Workspace Design */
-        .main-content {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            background-color: var(--bg-base);
-            position: relative;
-            min-width: 0;
-            overflow: hidden;
-            width: 100%;
-        }
-
-        /* Header Design */
-        .app-header {
-            min-height: var(--header-height);
-            border-bottom: 1px solid var(--border-color);
-            padding: 10px 24px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background-color: hsla(240, 20%, 8%, 0.8);
-            backdrop-filter: blur(10px);
-            z-index: 5;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .active-agent-detail {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            min-width: 0;
-            flex-wrap: wrap;
-        }
-
-        .header-agent-title {
-            font-size: 1.05rem;
-            font-weight: 700;
-            text-transform: capitalize;
-        }
-
-        .header-model-badge {
-            font-size: 0.72rem;
-            font-family: 'JetBrains Mono', monospace;
-            padding: 3px 8px;
-            background-color: var(--bg-surface);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-muted);
-            max-width: 100%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .header-actions {
+        .brand {
             display: flex;
             align-items: center;
             gap: 10px;
+            height: var(--header-height);
+            padding: 0 16px;
+            border-bottom: 1px solid var(--border);
             flex-shrink: 0;
         }
-
-        .btn {
-            background-color: var(--bg-surface);
-            border: 1px solid var(--border-color);
-            color: var(--text-main);
-            padding: 10px 16px;
-            border-radius: 10px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: var(--transition-smooth);
-            white-space: nowrap;
-        }
-
-        .btn:hover {
-            border-color: var(--border-hover);
-            background-color: hsla(240, 15%, 15%, 0.8);
-        }
-
-        .btn-primary {
-            background-color: var(--primary);
-            border-color: transparent;
-            color: white;
-            box-shadow: 0 4px 15px var(--primary-glow);
-        }
-
-        .btn-primary:hover {
-            background-color: var(--primary-hover);
-            box-shadow: 0 4px 20px var(--primary-glow);
-        }
-
-        /* Chat Panel */
-        .chat-pane {
-            flex-grow: 1;
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            min-width: 0;
-            width: 100%;
-        }
-
-        /* Chat Message Design */
-        .msg-row {
-            display: flex;
-            width: 100%;
-            min-width: 0;
-        }
-
-        .msg-row.user {
-            justify-content: flex-end;
-        }
-
-        .msg-row.agent {
-            justify-content: flex-start;
-        }
-
-        .msg-bubble {
-            max-width: 80%;
-            padding: 14px 18px;
-            border-radius: 16px;
-            font-size: 0.93rem;
-            line-height: 1.6;
-            word-break: break-word;
-            overflow-wrap: anywhere;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-
-        .msg-row.user .msg-bubble {
-            background: linear-gradient(135deg, var(--primary), hsl(262, 70%, 45%));
-            color: white;
-            border-bottom-right-radius: 4px;
-            box-shadow: 0 4px 15px var(--primary-glow);
-            margin-left: auto;
-            white-space: pre-wrap;
-        }
-
-        .msg-row.agent .msg-bubble {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border-color);
-            color: var(--text-main);
-            border-bottom-left-radius: 4px;
-        }
-
-        /* Markdown Styles in Messages */
-        .msg-bubble a {
-            color: var(--accent);
-            text-decoration: none;
-            font-weight: 600;
-            border-bottom: 1px dashed var(--accent);
-            transition: var(--transition-smooth);
-        }
-        .msg-bubble a:hover {
-            color: #fff;
-            border-bottom-style: solid;
-            text-shadow: 0 0 8px var(--accent-glow);
-        }
-        .msg-row.user .msg-bubble a {
-            color: hsl(190, 100%, 80%);
-            border-bottom-color: hsl(190, 100%, 80%);
-        }
-        .msg-row.user .msg-bubble a:hover {
-            color: #fff;
-        }
-
-        .msg-bubble h1, .msg-bubble h2, .msg-bubble h3 {
-            margin-bottom: 8px;
-            font-weight: 700;
-        }
-        .msg-bubble h1 { font-size: 1.25rem; }
-        .msg-bubble h2 { font-size: 1.1rem; }
-        .msg-bubble h3 { font-size: 1rem; }
-        
-        .msg-bubble p {
-            margin-bottom: 10px;
-        }
-        .msg-bubble p:last-child {
-            margin-bottom: 0;
-        }
-        
-        .msg-bubble ul, .msg-bubble ol {
-            margin-left: 20px;
-            margin-bottom: 10px;
-        }
-        
-        .msg-bubble li {
-            margin-bottom: 4px;
-        }
-
-        .msg-bubble code {
-            font-family: 'JetBrains Mono', monospace;
-            background-color: rgba(0,0,0,0.3);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            color: var(--accent);
-        }
-
-        .msg-bubble pre {
-            background-color: rgba(0,0,0,0.4);
-            padding: 14px;
+        .brand-mark {
+            width: 30px; height: 30px;
             border-radius: 8px;
-            overflow-x: auto;
-            margin: 12px 0;
-            border: 1px solid rgba(255,255,255,0.05);
+            background: var(--accent);
+            color: var(--accent-text);
+            display: grid; place-items: center;
+            font-size: 14px;
+        }
+        .brand-name { font-weight: 600; font-size: 15px; }
+        .brand-sub { font-size: 12px; color: var(--text-dim); }
+
+        .sidebar-scroll { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 18px; min-height: 0; }
+        .section-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-dim);
+            padding: 0 6px 6px;
+            display: flex; align-items: center; justify-content: space-between;
         }
 
-        .msg-bubble pre code {
-            background-color: transparent;
-            padding: 0;
-            color: var(--text-main);
-            font-size: 0.85rem;
+        .btn-new-chat {
+            width: 100%;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 9px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-strong);
+            background: var(--surface);
+            font-weight: 500;
+            transition: background 0.15s, border-color 0.15s;
         }
+        .btn-new-chat:hover:not(:disabled) { background: var(--surface-hover); }
+        .btn-new-chat:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        /* Input Controls Area */
-        .input-area {
-            padding: 20px 30px 30px 30px;
-            background-color: var(--bg-base);
-            border-top: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        /* Pill Suggestions */
-        .suggestions-row {
-            display: flex;
-            gap: 8px;
-            overflow-x: auto;
-            padding-bottom: 4px;
-        }
-
-        .suggestion-pill {
-            background-color: var(--bg-surface);
-            border: 1px solid var(--border-color);
-            color: var(--text-muted);
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 0.78rem;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: var(--transition-smooth);
-        }
-
-        .suggestion-pill:hover {
-            border-color: var(--primary);
-            color: var(--text-main);
-            background-color: var(--bg-card);
-        }
-
-        /* Chat Input Field Layout */
-        .chat-input-wrapper {
-            display: flex;
-            align-items: center;
-            background-color: var(--bg-surface);
-            border: 1px solid var(--border-color);
-            border-radius: 14px;
-            padding: 8px 12px;
-            gap: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-            transition: var(--transition-smooth);
-        }
-
-        .chat-input-wrapper:focus-within {
-            border-color: var(--primary);
-            box-shadow: 0 4px 20px var(--primary-glow);
-        }
-
-        .chat-input {
-            flex-grow: 1;
+        .agent-list, .chat-list { display: flex; flex-direction: column; gap: 2px; }
+        .agent-item {
+            display: flex; align-items: center; gap: 10px;
+            width: 100%;
+            padding: 8px 8px;
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
             background: transparent;
-            border: none;
-            outline: none;
-            color: var(--text-main);
-            font-family: inherit;
-            font-size: 0.95rem;
-            padding: 8px 4px;
-            resize: none;
-            max-height: 120px;
-            height: 38px;
+            text-align: left;
+            transition: background 0.15s;
         }
-
-        .send-btn {
-            background-color: var(--primary);
-            color: white;
-            border: none;
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: var(--transition-smooth);
-            box-shadow: 0 4px 10px var(--primary-glow);
-            flex-shrink: 0;
-        }
-
-        .send-btn:hover {
-            background-color: var(--primary-hover);
-            transform: scale(1.03);
-        }
-
-        .send-btn:disabled {
-            background-color: var(--border-color);
-            color: var(--text-dim);
-            cursor: not-allowed;
-            box-shadow: none;
-            transform: none;
-        }
-
-        /* Typing Indicator Animation */
-        .typing-bubble {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 12px 18px;
-        }
-
-        .typing-dot {
-            width: 8px;
-            height: 8px;
-            background-color: var(--text-muted);
-            border-radius: 50%;
-            animation: typingBounce 1.4s infinite ease-in-out both;
-        }
-
-        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
-        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-
-        @keyframes typingBounce {
-            0%, 80%, 100% { transform: scale(0); }
-            40% { transform: scale(1.0); }
-        }
-
-        /* Empty State */
-        .empty-state {
-            margin: auto;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            max-width: 420px;
-            gap: 16px;
-            opacity: 0.85;
-        }
-
-        .empty-icon {
-            font-size: 3rem;
-            background: linear-gradient(135deg, var(--primary), var(--accent));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 8px;
-        }
-
-        .empty-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-        }
-
-        .empty-desc {
-            font-size: 0.85rem;
+        .agent-item:hover { background: var(--surface-hover); }
+        .agent-item.active { background: var(--accent-soft); border-color: transparent; }
+        .agent-icon {
+            width: 30px; height: 30px; flex-shrink: 0;
+            border-radius: 8px;
+            display: grid; place-items: center;
+            background: var(--surface-2);
             color: var(--text-muted);
-            line-height: 1.5;
+            font-size: 15px;
         }
+        .agent-item.active .agent-icon { background: var(--accent); color: var(--accent-text); }
+        .agent-text { flex: 1; min-width: 0; }
+        .agent-name { font-weight: 500; }
+        .agent-meta { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        /* Mobile Overlay */
-        .sidebar-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(0, 0, 0, 0.65);
-            backdrop-filter: blur(4px);
-            z-index: 95;
-            opacity: 0;
-            transition: opacity 0.3s ease;
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--text-dim); }
+        .status-dot.ready { background: var(--success); }
+        .status-dot.connecting { background: var(--warning); animation: pulse 1.2s ease-in-out infinite; }
+        .status-dot.error { background: var(--danger); }
+        @keyframes pulse { 50% { opacity: 0.35; } }
+
+        .chat-item {
+            display: flex; align-items: center; gap: 6px;
+            border-radius: var(--radius-sm);
+            transition: background 0.15s;
         }
-
-        .sidebar-overlay.active {
-            display: block;
-            opacity: 1;
+        .chat-item:hover { background: var(--surface-hover); }
+        .chat-item.active { background: var(--surface-2); }
+        .chat-open {
+            flex: 1; min-width: 0;
+            padding: 7px 8px;
+            border: 0; background: transparent; text-align: left;
         }
+        .chat-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+        .chat-time { display: block; font-size: 11px; color: var(--text-dim); }
+        .chat-delete {
+            border: 0; background: transparent; color: var(--text-dim);
+            width: 28px; height: 28px; border-radius: 6px; margin-right: 4px;
+            opacity: 0; transition: opacity 0.15s, background 0.15s;
+        }
+        .chat-item:hover .chat-delete, .chat-delete:focus-visible { opacity: 1; }
+        .chat-delete:hover { background: var(--danger-soft); color: var(--danger); }
+        .empty-note { font-size: 12px; color: var(--text-dim); padding: 4px 8px; }
 
-        /* Mobile Hamburger Toggle Button */
-        .mobile-toggle-btn {
-            display: none;
-            background: var(--bg-surface);
-            border: 1px solid var(--border-color);
-            color: var(--text-main);
-            width: 38px;
-            height: 38px;
-            border-radius: 10px;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.1rem;
+        .sidebar-footer { border-top: 1px solid var(--border); flex-shrink: 0; }
+        details.panel { border-bottom: 1px solid var(--border); }
+        details.panel:last-child { border-bottom: 0; }
+        details.panel summary {
+            list-style: none;
+            display: flex; align-items: center; gap: 8px;
+            padding: 11px 16px;
+            font-size: 13px; font-weight: 500;
             cursor: pointer;
-            transition: var(--transition-smooth);
+            color: var(--text-muted);
+        }
+        details.panel summary::-webkit-details-marker { display: none; }
+        details.panel summary .chev { margin-left: auto; font-size: 11px; transition: transform 0.2s; }
+        details.panel[open] summary .chev { transform: rotate(180deg); }
+        details.panel summary:hover { color: var(--text); }
+        .panel-body { padding: 0 16px 14px; display: flex; flex-direction: column; gap: 10px; }
+        .tool-count { margin-left: auto; font-size: 11px; background: var(--surface-2); border-radius: 10px; padding: 1px 7px; color: var(--text-muted); }
+        details.panel[open] .tool-count { margin-left: 0; }
+
+        .field { display: flex; flex-direction: column; gap: 4px; }
+        .field label { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+        .input, .select {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-sm);
+            background: var(--surface);
+            font-size: 13px;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .input:focus, .select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+        .input-wrap { position: relative; }
+        .input-wrap .input { padding-right: 34px; }
+        .input-icon-btn {
+            position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+            width: 28px; height: 28px; border: 0; border-radius: 6px;
+            background: transparent; color: var(--text-dim);
+        }
+        .input-icon-btn:hover { color: var(--text); }
+        .field-hint { font-size: 11px; color: var(--text-dim); }
+        .field-hint.ok { color: var(--success); }
+
+        .tools-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+        .tool-row {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            padding: 5px 8px;
+            border-radius: 6px;
+            background: var(--surface-2);
+            color: var(--text-muted);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            cursor: help;
+        }
+        .tools-note { font-size: 12px; color: var(--text-dim); }
+        .tools-note.error { color: var(--danger); white-space: normal; }
+
+        /* ---------- Main ---------- */
+        .main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+        .header {
+            height: var(--header-height);
             flex-shrink: 0;
+            display: flex; align-items: center; gap: 12px;
+            padding: 0 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
         }
-
-        .mobile-toggle-btn:hover {
-            border-color: var(--primary);
-            color: var(--primary);
+        .header-title { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; overflow: hidden; }
+        .header-title h1 { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .status-pill {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 12px; padding: 3px 9px; border-radius: 20px;
+            background: var(--surface-2); color: var(--text-muted);
+            white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis;
         }
+        .status-pill.ready { background: var(--success-soft); color: var(--success); }
+        .status-pill.connecting { background: var(--warning-soft); color: var(--warning); }
+        .status-pill.error { background: var(--danger-soft); color: var(--danger); }
+        .model-chip {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px; color: var(--text-muted);
+            border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px;
+            white-space: nowrap;
+        }
+        .header-actions { display: flex; align-items: center; gap: 4px; }
+        .icon-btn {
+            height: 34px; min-width: 34px; padding: 0 10px;
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            border: 1px solid transparent; border-radius: var(--radius-sm);
+            background: transparent; color: var(--text-muted); font-size: 13px;
+            transition: background 0.15s, color 0.15s;
+        }
+        .icon-btn:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
+        .icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .menu-btn { display: none; }
 
-        /* Responsive Breakpoints */
-        @media (max-width: 900px) {
-            .mobile-toggle-btn {
-                display: flex;
-            }
+        .chat-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; min-height: 0; }
+        .chat-inner { max-width: 820px; width: 100%; min-width: 0; margin: 0 auto; padding: 24px 20px 12px; display: flex; flex-direction: column; gap: 20px; }
 
+        .welcome { text-align: center; padding: 56px 12px 8px; }
+        .welcome-icon {
+            width: 52px; height: 52px; margin: 0 auto 16px;
+            border-radius: 14px; display: grid; place-items: center;
+            background: var(--accent-soft); color: var(--accent); font-size: 22px;
+        }
+        .welcome h2 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+        .welcome p { color: var(--text-muted); max-width: 520px; margin: 0 auto; }
+        .prompt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 24px; text-align: left; }
+        .prompt-card {
+            padding: 12px 14px;
+            border: 1px solid var(--border); border-radius: var(--radius);
+            background: var(--surface); color: var(--text);
+            text-align: left; font-size: 13px;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .prompt-card:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); }
+        .prompt-card i { color: var(--accent); margin-right: 6px; }
+
+        /* Messages */
+        .msg { display: flex; gap: 12px; min-width: 0; }
+        .msg.user { justify-content: flex-end; }
+        .avatar {
+            width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px;
+            display: grid; place-items: center;
+            background: var(--surface-2); color: var(--text-muted); font-size: 14px;
+            margin-top: 2px;
+        }
+        .msg-body { min-width: 0; max-width: 100%; }
+        .msg.agent .msg-body { flex: 1; }
+        .user-bubble {
+            max-width: min(620px, 85%);
+            background: var(--accent);
+            color: var(--accent-text);
+            padding: 9px 14px;
+            border-radius: 14px 14px 4px 14px;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+        .msg.user .msg-body { display: flex; justify-content: flex-end; }
+        .agent-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 4px 14px 14px 14px;
+            padding: 12px 16px;
+            box-shadow: var(--shadow-sm);
+            overflow-wrap: anywhere;
+        }
+        .msg-meta {
+            display: flex; align-items: center; gap: 10px;
+            margin-top: 6px; padding-left: 2px;
+            font-size: 12px; color: var(--text-dim);
+        }
+        .msg-meta .sep { opacity: 0.5; }
+        .copy-btn {
+            border: 0; background: transparent; color: var(--text-dim);
+            font-size: 12px; padding: 2px 6px; border-radius: 5px;
+        }
+        .copy-btn:hover { background: var(--surface-hover); color: var(--text); }
+
+        .alert {
+            display: flex; gap: 10px; align-items: flex-start;
+            background: var(--danger-soft); color: var(--danger);
+            border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+            border-radius: var(--radius); padding: 10px 14px; font-size: 13px;
+            overflow-wrap: anywhere;
+        }
+        .alert strong { display: block; margin-bottom: 2px; }
+        .alert .alert-text { color: var(--text); }
+
+        .thinking { display: flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: 13px; }
+        .dots { display: inline-flex; gap: 4px; }
+        .dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); animation: blink 1.2s infinite ease-in-out; }
+        .dots span:nth-child(2) { animation-delay: 0.15s; }
+        .dots span:nth-child(3) { animation-delay: 0.3s; }
+        @keyframes blink { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
+        .loading-note { text-align: center; color: var(--text-dim); padding: 40px 0; }
+
+        /* Markdown inside agent answers */
+        .md { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+        .md li, .md p, .md code { overflow-wrap: anywhere; }
+        .md > :first-child { margin-top: 0; }
+        .md > :last-child { margin-bottom: 0; }
+        .md p, .md ul, .md ol, .md pre, .md blockquote, .md .table-wrap { margin: 0 0 10px; }
+        .md h1, .md h2, .md h3, .md h4 { margin: 14px 0 8px; font-weight: 600; line-height: 1.3; }
+        .md h1 { font-size: 18px; } .md h2 { font-size: 16px; } .md h3, .md h4 { font-size: 14px; }
+        .md ul, .md ol { padding-left: 22px; }
+        .md li { margin: 3px 0; }
+        .md a { color: var(--accent); text-decoration: none; }
+        .md a:hover { text-decoration: underline; }
+        .md strong { font-weight: 600; }
+        .md code { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+        .md pre { position: relative; background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; overflow-x: auto; }
+        .md pre code { background: transparent; padding: 0; font-size: 12.5px; }
+        .md pre .copy-btn { position: absolute; top: 6px; right: 6px; background: var(--surface); border: 1px solid var(--border); }
+        .md blockquote { border-left: 3px solid var(--border-strong); padding-left: 12px; color: var(--text-muted); }
+        .md hr { border: 0; border-top: 1px solid var(--border); margin: 12px 0; }
+        .md .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+        .md table { border-collapse: collapse; width: 100%; font-size: 13px; }
+        .md th, .md td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+        .md th { background: var(--surface-2); font-weight: 600; }
+        .md tr:last-child td { border-bottom: 0; }
+
+        /* Composer */
+        .composer { flex-shrink: 0; padding: 8px 20px 16px; }
+        .composer-inner { max-width: 820px; margin: 0 auto; }
+        .composer-box {
+            display: flex; align-items: flex-end; gap: 8px;
+            border: 1px solid var(--border-strong); border-radius: 14px;
+            background: var(--surface); padding: 8px 8px 8px 14px;
+            box-shadow: var(--shadow-md);
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .composer-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md); }
+        .composer textarea {
+            flex: 1; border: 0; background: transparent; resize: none; outline: none;
+            min-height: 24px; max-height: 200px; padding: 6px 0; line-height: 1.5;
+        }
+        .composer textarea:focus-visible { outline: none; }
+        .send-btn {
+            width: 36px; height: 36px; flex-shrink: 0;
+            border: 0; border-radius: 10px;
+            background: var(--accent); color: var(--accent-text);
+            transition: background 0.15s, opacity 0.15s;
+        }
+        .send-btn:hover:not(:disabled) { background: var(--accent-hover); }
+        .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .composer-hint { font-size: 11px; color: var(--text-dim); text-align: center; margin-top: 6px; }
+        .composer-hint kbd { font-family: inherit; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; font-size: 10px; }
+
+        /* ---------- Mobile ---------- */
+        .overlay { display: none; }
+        @media (max-width: 860px) {
             .sidebar {
-                position: fixed;
-                top: 0;
-                left: 0;
-                bottom: 0;
-                z-index: 100;
-                transform: translateX(-100%);
-                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                box-shadow: 5px 0 25px rgba(0, 0, 0, 0.5);
-                width: 300px;
-                max-width: 85vw;
+                position: fixed; inset: 0 auto 0 0; z-index: 40;
+                transform: translateX(-100%); transition: transform 0.25s ease;
+                box-shadow: var(--shadow-md);
             }
-
-            .sidebar.open {
-                transform: translateX(0);
-            }
-
-            .app-header {
-                padding: 10px 16px;
-            }
-
-            .chat-pane {
-                padding: 16px;
-                gap: 16px;
-            }
-
-            .msg-bubble {
-                max-width: 92%;
-                padding: 12px 16px;
-                font-size: 0.88rem;
-            }
-
-            .input-area {
-                padding: 12px 14px 18px 14px;
-            }
+            .sidebar.open { transform: translateX(0); }
+            .overlay { display: block; position: fixed; inset: 0; z-index: 30; background: rgba(0, 0, 0, 0.35); opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+            .overlay.active { opacity: 1; pointer-events: auto; }
+            .menu-btn { display: inline-flex; }
+            .header { padding: 0 12px; }
+            .model-chip, .btn-label { display: none; }
+            .chat-inner { padding: 18px 14px 10px; }
+            .composer { padding: 6px 12px 12px; }
+            .avatar { display: none; }
+            .user-bubble { max-width: 92%; }
+            .status-pill { max-width: 140px; }
         }
-
-        @media (max-width: 600px) {
-            .header-agent-title {
-                font-size: 0.92rem;
-            }
-
-            .header-model-badge {
-                font-size: 0.68rem;
-                padding: 2px 6px;
-            }
-
-            .btn {
-                padding: 8px 12px;
-                font-size: 0.78rem;
-            }
-
-            .btn-text {
-                display: none;
-            }
-
-            .suggestion-pill {
-                font-size: 0.74rem;
-                padding: 5px 10px;
-            }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
         }
     </style>
 </head>
 <body>
-    <div class="app-container">
-        <!-- Sidebar Overlay for Mobile -->
-        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar(false)"></div>
-        <!-- Sidebar -->
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <div class="logo-icon">
-                    <i class="fa-solid fa-network-wired"></i>
-                </div>
-                <div class="logo-text">
-                    <h1>MCP Console</h1>
-                    <span>Agent Workspace</span>
+    <div class="app">
+        <div class="overlay" id="overlay" onclick="toggleSidebar(false)"></div>
+
+        <aside class="sidebar" id="sidebar" aria-label="Navigation">
+            <div class="brand">
+                <div class="brand-mark"><i class="fa-solid fa-network-wired" aria-hidden="true"></i></div>
+                <div>
+                    <div class="brand-name">MCP Agent Console</div>
+                    <div class="brand-sub">GitHub · Jira · Slack · Web</div>
                 </div>
             </div>
-            
-            <div class="sidebar-content">
-                <!-- LLM Config Section -->
-                <div>
-                    <div class="section-title">
-                        <i class="fa-solid fa-brain"></i> LLM Configuration
+
+            <div class="sidebar-scroll">
+                <button class="btn-new-chat" id="newChatBtn" onclick="newChat()" disabled title="New chat (Ctrl+K)">
+                    <i class="fa-solid fa-plus" aria-hidden="true"></i> New chat
+                </button>
+
+                <section>
+                    <div class="section-label">Agents</div>
+                    <div class="agent-list" id="agentList" role="list"></div>
+                </section>
+
+                <section>
+                    <div class="section-label">Chats</div>
+                    <div class="chat-list" id="chatList">
+                        <div class="empty-note">Select an agent to see its chats.</div>
                     </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="providerSelect">Provider</label>
-                        <select id="providerSelect" class="select-input" onchange="handleProviderChange()">
-                            <!-- Populated dynamically -->
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="modelInput">Model</label>
-                        <input id="modelInput" type="text" class="text-input" placeholder="e.g. gpt-4o-mini" onchange="handleModelOrKeyChange()">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="apiKeyInput">API Key</label>
-                        <div class="api-key-container">
-                            <input id="apiKeyInput" type="password" class="text-input" placeholder="Enter API Key" autocomplete="new-password" onchange="handleModelOrKeyChange()">
-                            <span class="api-key-toggle" onclick="toggleApiKeyVisibility()">
-                                <i id="apiKeyVisibilityIcon" class="fa-solid fa-eye-slash"></i>
-                            </span>
+                </section>
+            </div>
+
+            <div class="sidebar-footer">
+                <details class="panel" id="settingsPanel">
+                    <summary><i class="fa-solid fa-sliders" aria-hidden="true"></i> Model settings <i class="fa-solid fa-chevron-up chev" aria-hidden="true"></i></summary>
+                    <div class="panel-body">
+                        <div class="field">
+                            <label for="providerSelect">Provider</label>
+                            <select id="providerSelect" class="select" onchange="handleProviderChange()"></select>
+                        </div>
+                        <div class="field">
+                            <label for="modelInput">Model</label>
+                            <input id="modelInput" type="text" class="input" placeholder="e.g. qwen2.5:3b" onchange="handleModelOrKeyChange()">
+                        </div>
+                        <div class="field">
+                            <label for="apiKeyInput" id="apiKeyLabel">API key</label>
+                            <div class="input-wrap">
+                                <input id="apiKeyInput" type="password" class="input" autocomplete="off" spellcheck="false" onchange="handleModelOrKeyChange()">
+                                <button type="button" class="input-icon-btn" id="apiKeyToggle" onclick="toggleApiKeyVisibility()" aria-label="Show or hide API key">
+                                    <i id="apiKeyIcon" class="fa-solid fa-eye-slash" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                            <div class="field-hint" id="apiKeyHint"></div>
                         </div>
                     </div>
-                </div>
-
-                <!-- Agent Selection Section -->
-                <div>
-                    <div class="section-title">
-                        <i class="fa-solid fa-robot"></i> Choose Agent
+                </details>
+                <details class="panel" id="toolsPanel">
+                    <summary><i class="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i> Tools <span class="tool-count" id="toolCount">0</span> <i class="fa-solid fa-chevron-up chev" aria-hidden="true"></i></summary>
+                    <div class="panel-body">
+                        <div class="tools-list" id="toolsList"><div class="tools-note">Select an agent to load its tools.</div></div>
                     </div>
-                    <div class="agent-list" id="agentList">
-                        <!-- Populated dynamically -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- Tools list at bottom -->
-            <div class="tools-inspector">
-                <div class="tools-header">
-                    <div class="section-title" style="margin-bottom:0;">
-                        <i class="fa-solid fa-screwdriver-wrench"></i> Active Tools
-                    </div>
-                    <span class="tool-count" id="toolCount">0</span>
-                </div>
-                <div class="tools-list-container" id="toolsList">
-                    <div style="font-size:0.75rem; color:var(--text-dim); text-align:center; padding:10px;">
-                        No tools loaded. Select an agent to fetch tools.
-                    </div>
-                </div>
+                </details>
             </div>
         </aside>
 
-        <!-- Main Content Area -->
-        <main class="main-content">
-            <!-- Header -->
-            <header class="app-header">
-                <button class="mobile-toggle-btn" id="mobileToggleBtn" onclick="toggleSidebar()" title="Toggle Sidebar">
-                    <i class="fa-solid fa-bars"></i>
-                </button>
-                <div class="active-agent-detail">
-                    <span class="header-agent-title" id="activeAgentTitle">No Agent Selected</span>
-                    <span class="header-model-badge" id="activeModelTitle">No Model</span>
+        <main class="main">
+            <header class="header">
+                <button class="icon-btn menu-btn" onclick="toggleSidebar()" aria-label="Open menu"><i class="fa-solid fa-bars" aria-hidden="true"></i></button>
+                <div class="header-title">
+                    <h1 id="agentTitle">Select an agent</h1>
+                    <span class="status-pill" id="statusPill" hidden><span class="status-dot" id="statusDot"></span><span id="statusText"></span></span>
                 </div>
-                
+                <span class="model-chip" id="modelChip"></span>
                 <div class="header-actions">
-                    <button class="btn" onclick="clearActiveSession()" title="Clear Chat">
-                        <i class="fa-solid fa-trash-can"></i> <span class="btn-text">Clear Chat</span>
+                    <button class="icon-btn" id="reconnectBtn" onclick="initializeOrFetchTools()" disabled title="Reconnect agent and reload tools" aria-label="Reconnect agent">
+                        <i class="fa-solid fa-rotate" aria-hidden="true"></i><span class="btn-label">Reconnect</span>
                     </button>
-                    <button class="btn btn-primary" onclick="initializeOrFetchTools()" title="Re-Init Agent">
-                        <i class="fa-solid fa-arrows-rotate"></i> <span class="btn-text">Re-Init Agent</span>
+                    <button class="icon-btn" id="clearBtn" onclick="clearActiveSession()" disabled title="Delete this chat" aria-label="Delete this chat">
+                        <i class="fa-regular fa-trash-can" aria-hidden="true"></i>
+                    </button>
+                    <button class="icon-btn" onclick="toggleTheme()" title="Toggle light/dark theme" aria-label="Toggle theme">
+                        <i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i>
                     </button>
                 </div>
             </header>
 
-            <!-- Chat Pane -->
-            <div class="chat-pane" id="chatPane">
-                <div class="empty-state" id="emptyState">
-                    <div class="empty-icon"><i class="fa-solid fa-comments"></i></div>
-                    <h3 class="empty-title">Welcome to MCP Agent Workspace</h3>
-                    <p class="empty-desc">Configure your LLM settings, select an agent from the sidebar, and start chatting. The agent will discover and call MCP tools automatically.</p>
+            <div class="chat-scroll" id="chatScroll">
+                <div class="chat-inner" id="chatPane" aria-live="polite">
+                    <div class="welcome">
+                        <div class="welcome-icon"><i class="fa-solid fa-comments" aria-hidden="true"></i></div>
+                        <h2>Welcome to the MCP Agent Console</h2>
+                        <p>Pick an agent on the left. It discovers its MCP tools automatically and calls them to answer your questions.</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Input Bar -->
-            <div class="input-area">
-                <div class="suggestions-row" id="suggestionsRow">
-                    <!-- Loaded dynamically based on active agent -->
-                </div>
-                
-                <div class="chat-input-wrapper">
-                    <textarea id="chatInput" class="chat-input" placeholder="Type a message to the agent..." onkeydown="handleInputKeydown(event)"></textarea>
-                    <button id="sendBtn" class="send-btn" onclick="sendChatMessage()" disabled>
-                        <i class="fa-solid fa-paper-plane"></i>
-                    </button>
+            <div class="composer">
+                <div class="composer-inner">
+                    <div class="composer-box">
+                        <label for="chatInput" class="sr-only">Message</label>
+                        <textarea id="chatInput" rows="1" placeholder="Select an agent to start…" disabled onkeydown="handleInputKeydown(event)"></textarea>
+                        <button id="sendBtn" class="send-btn" onclick="sendChatMessage()" disabled aria-label="Send message">
+                            <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div class="composer-hint"><kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line · <kbd>Ctrl</kbd>+<kbd>K</kbd> new chat</div>
                 </div>
             </div>
         </main>
@@ -938,463 +601,618 @@
     <script>
         let configData = null;
         let activeAgentName = null;
-        let activeSessionId = "default";
+        let activeSessionId = null;
         let isGenerating = false;
+        let agentStatus = {};
+        let statusTimer = null;
 
         const SUGGESTIONS = {
             github: [
-                "List repositories for user: Chantha-123",
-                "Create a new issue with title test",
-                "Show details of my latest PR"
+                "Search repositories of user octocat",
+                "Search open issues in octocat/Hello-World",
+                "Search repositories of user Chantha-123"
             ],
             jira: [
                 "List my jira projects",
-                "Search for open issues in SCRUM project",
-                "Get details for issue SCRUM-1"
+                "Search open issues in project SCRUM",
+                "Who is assigned to SCRUM-7?"
             ],
             slack: [
                 "List my slack channels",
-                "Search messages containing test",
-                "What users are in my workspace?"
+                "Show the latest messages in #new-channel",
+                "Send \"Hello team\" to #all-mcpthesis"
             ],
             "web-reader": [
-                "Summarize content from https://www.khmer24.com/en",
-                "Find car listings and prices on https://www.khmer24.com/en/c-cars-and-vehicles.html",
-                "What is the latest news or information on https://www.khmer24.com/en"
+                "Summarize https://example.com in one sentence",
+                "What is on the python.org homepage?",
+                "List the main sections of https://www.python.org/about/"
             ]
         };
-
         const AGENT_ICONS = {
             github: "fa-brands fa-github",
-            jira: "fa-solid fa-jira",
+            jira: "fa-brands fa-jira",
             slack: "fa-brands fa-slack",
             "web-reader": "fa-solid fa-globe"
         };
-
         const AGENT_DESCRIPTIONS = {
-            github: "Repository & PR management",
-            jira: "Issue tracking & sprints",
-            slack: "Channel communications",
-            "web-reader": "Fetch & read website URLs"
+            github: "Repositories, issues & code",
+            jira: "Projects & issue tracking",
+            slack: "Channels & messages",
+            "web-reader": "Read & summarize web pages"
         };
+        const STATUS_LABELS = { ready: "Connected", connecting: "Connecting…", error: "Error", idle: "Not connected" };
 
-        // Initialize App
+        // ---------- Helpers ----------
+        function $(id) { return document.getElementById(id); }
+        function store(key, value) {
+            try { value === null ? localStorage.removeItem(key) : localStorage.setItem(key, value); } catch (e) {}
+        }
+        function load(key) {
+            try { return localStorage.getItem(key); } catch (e) { return null; }
+        }
+        const AGENT_NAMES = { github: 'GitHub', jira: 'Jira', slack: 'Slack', 'web-reader': 'Web Reader' };
+        function agentLabel(name) { return AGENT_NAMES[name] || name.replace('-', ' '); }
+        function plural(n, word) { return `${n} ${word}${n === 1 ? '' : 's'}`; }
+        function el(tag, className, text) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text !== undefined) node.textContent = text;
+            return node;
+        }
+        function icon(cls) {
+            const i = el('i', cls);
+            i.setAttribute('aria-hidden', 'true');
+            return i;
+        }
+        function relativeTime(iso) {
+            if (!iso) return '';
+            const seconds = (Date.now() - new Date(iso).getTime()) / 1000;
+            if (seconds < 60) return 'just now';
+            if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+            if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
+            return new Date(iso).toLocaleDateString();
+        }
+        function newSessionId() { return 'chat-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+        async function copyText(text, button) {
+            try {
+                await navigator.clipboard.writeText(text);
+                const original = button.innerHTML;
+                button.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i> Copied';
+                setTimeout(() => { button.innerHTML = original; }, 1400);
+            } catch (e) { console.error('Copy failed', e); }
+        }
+
+        // Agent answers include text from Slack, Jira, GitHub and web pages, so the
+        // rendered Markdown is sanitized before it touches the page.
+        function renderMarkdown(text) {
+            const container = el('div', 'md');
+            const html = marked.parse(text || '', { gfm: true, breaks: false });
+            container.innerHTML = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+            container.querySelectorAll('a').forEach(a => {
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+            });
+            container.querySelectorAll('table').forEach(table => {
+                const wrap = el('div', 'table-wrap');
+                table.parentNode.insertBefore(wrap, table);
+                wrap.appendChild(table);
+            });
+            container.querySelectorAll('pre').forEach(pre => {
+                const btn = el('button', 'copy-btn');
+                btn.type = 'button';
+                btn.innerHTML = '<i class="fa-regular fa-copy" aria-hidden="true"></i>';
+                btn.setAttribute('aria-label', 'Copy code');
+                btn.onclick = () => copyText(pre.innerText.trim(), btn);
+                pre.appendChild(btn);
+            });
+            return container;
+        }
+
+        // ---------- Theme ----------
+        function toggleTheme() {
+            const current = document.documentElement.dataset.theme
+                || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            const next = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.dataset.theme = next;
+            store('mcp.theme', next);
+        }
+
+        // ---------- Startup ----------
         window.addEventListener('DOMContentLoaded', async () => {
-            await fetchConfig();
             setupAutoResize();
+            document.addEventListener('keydown', handleGlobalKeys);
+            await fetchConfig();
+            await refreshStatus();
+            // ?agent=jira opens that agent directly (shareable link); otherwise the last one used
+            const requested = new URLSearchParams(location.search).get('agent') || load('mcp.agent');
+            if (requested && configData && configData.agents.includes(requested)) selectAgent(requested);
         });
 
         async function fetchConfig() {
             try {
                 const res = await fetch('/api/config');
                 configData = await res.json();
-                
-                // Populate Provider Select
-                const providerSelect = document.getElementById('providerSelect');
+
+                const providerSelect = $('providerSelect');
                 providerSelect.innerHTML = '';
                 configData.providers.forEach(p => {
-                    const opt = document.createElement('option');
+                    const opt = el('option', '', p.charAt(0).toUpperCase() + p.slice(1));
                     opt.value = p;
-                    opt.textContent = p.charAt(0).toUpperCase() + p.slice(1);
-                    if (p === configData.current_provider) {
-                        opt.selected = true;
-                    }
+                    if (p === configData.current_provider) opt.selected = true;
                     providerSelect.appendChild(opt);
                 });
 
-                // Populate Agents List
-                const agentListDiv = document.getElementById('agentList');
-                agentListDiv.innerHTML = '';
-                configData.agents.forEach(agent => {
-                    const card = document.createElement('div');
-                    card.className = `agent-card ${agent === activeAgentName ? 'active' : ''}`;
-                    card.id = `card-${agent}`;
-                    card.onclick = () => selectAgent(agent);
-
-                    const iconCls = AGENT_ICONS[agent] || "fa-solid fa-robot";
-                    const descText = AGENT_DESCRIPTIONS[agent] || "MCP Service Agent";
-
-                    card.innerHTML = `
-                        <div class="agent-icon">
-                            <i class="${iconCls}"></i>
-                        </div>
-                        <div class="agent-info">
-                            <div class="agent-name">${agent.replace('-', ' ')}</div>
-                            <div class="agent-desc">${descText}</div>
-                        </div>
-                    `;
-                    agentListDiv.appendChild(card);
-                });
-
-                // Trigger change to populate key/model defaults
+                renderAgentList();
                 handleProviderChange(true);
-
             } catch (err) {
-                console.error("Failed to load initial configuration:", err);
+                console.error('Failed to load configuration:', err);
+                showAlert('Could not load configuration', 'The server did not respond. Check that it is running and reload the page.');
             }
         }
 
-        function handleProviderChange(isInitial = false) {
-            const provider = document.getElementById('providerSelect').value;
-            const modelInput = document.getElementById('modelInput');
-            const apiKeyInput = document.getElementById('apiKeyInput');
-            const apiKeyLabel = document.querySelector('label[for="apiKeyInput"]');
-            const apiKeyToggle = document.querySelector('.api-key-toggle');
+        function renderAgentList() {
+            const list = $('agentList');
+            list.innerHTML = '';
+            configData.agents.forEach(agent => {
+                const status = agentStatus[agent] || { state: 'idle' };
+                const item = el('button', 'agent-item' + (agent === activeAgentName ? ' active' : ''));
+                item.type = 'button';
+                item.id = `agent-${agent}`;
+                item.setAttribute('role', 'listitem');
+                item.onclick = () => selectAgent(agent);
+                item.title = status.message ? `${STATUS_LABELS[status.state] || status.state}: ${status.message}` : (STATUS_LABELS[status.state] || '');
 
-            // Apply defaults from configData
-            modelInput.value = configData.models[provider] || "";
-            apiKeyInput.value = configData.api_keys[provider] || "";
+                const iconBox = el('div', 'agent-icon');
+                iconBox.appendChild(icon(AGENT_ICONS[agent] || 'fa-solid fa-robot'));
+                const text = el('div', 'agent-text');
+                text.appendChild(el('div', 'agent-name', agentLabel(agent)));
+                let meta = AGENT_DESCRIPTIONS[agent] || 'MCP agent';
+                if (status.state === 'ready' && status.tools !== undefined) meta = `${plural(status.tools, 'tool')} · ${meta}`;
+                if (status.state === 'error') meta = 'Error: ' + (status.message || 'not connected');
+                text.appendChild(el('div', 'agent-meta', meta));
+                const dot = el('span', 'status-dot ' + (status.state || 'idle'));
+                dot.setAttribute('aria-label', STATUS_LABELS[status.state] || status.state);
 
-            if (provider === 'ollama') {
-                if (apiKeyLabel) apiKeyLabel.textContent = "Ollama URL (optional)";
-                apiKeyInput.placeholder = "e.g. http://localhost:11434 or http://ollama:11434";
-                apiKeyInput.type = "text";
-                if (apiKeyToggle) apiKeyToggle.style.display = "none";
-            } else {
-                if (apiKeyLabel) apiKeyLabel.textContent = "API Key";
-                apiKeyInput.placeholder = "Enter API Key";
-                apiKeyInput.type = "password";
-                if (apiKeyToggle) apiKeyToggle.style.display = "block";
-            }
-
-            updateHeaderModel();
-
-            // Auto-reinitialize the active agent and clear the chat history when provider is changed
-            if (!isInitial) {
-                clearActiveSession();
-                initializeOrFetchTools();
-            }
-        }
-
-        function toggleSidebar(forceState) {
-            const sidebar = document.querySelector('.sidebar');
-            const overlay = document.getElementById('sidebarOverlay');
-            if (!sidebar || !overlay) return;
-            const isOpen = forceState !== undefined ? forceState : !sidebar.classList.contains('open');
-
-            if (isOpen) {
-                sidebar.classList.add('open');
-                overlay.classList.add('active');
-            } else {
-                sidebar.classList.remove('open');
-                overlay.classList.remove('active');
-            }
-        }
-
-        function handleModelOrKeyChange() {
-            updateHeaderModel();
-            clearActiveSession();
-            initializeOrFetchTools();
-        }
-
-        function selectAgent(agentName) {
-            if (activeAgentName === agentName) {
-                toggleSidebar(false);
-                return;
-            }
-
-            // Update UI class
-            if (activeAgentName) {
-                document.getElementById(`card-${activeAgentName}`).classList.remove('active');
-            }
-            activeAgentName = agentName;
-            document.getElementById(`card-${agentName}`).classList.add('active');
-
-            // Close mobile sidebar after selecting an agent
-            toggleSidebar(false);
-
-            // Update Header
-            document.getElementById('activeAgentTitle').textContent = agentName.replace('-', ' ') + " Agent";
-            updateHeaderModel();
-
-            // Enable input and clear chat pane
-            document.getElementById('sendBtn').disabled = false;
-            
-            // Populate suggestions
-            populateSuggestions(agentName);
-
-            // Fetch session messages
-            loadSessionMessages();
-
-            // Load tools
-            initializeOrFetchTools();
-        }
-
-        function populateSuggestions(agentName) {
-            const row = document.getElementById('suggestionsRow');
-            row.innerHTML = '';
-            const prompts = SUGGESTIONS[agentName] || [];
-            prompts.forEach(p => {
-                const pill = document.createElement('div');
-                pill.className = 'suggestion-pill';
-                pill.textContent = p;
-                pill.onclick = () => {
-                    document.getElementById('chatInput').value = p;
-                    sendChatMessage();
-                };
-                row.appendChild(pill);
+                item.append(iconBox, text, dot);
+                list.appendChild(item);
             });
         }
 
-        function updateHeaderModel() {
-            const provider = document.getElementById('providerSelect').value;
-            const model = document.getElementById('modelInput').value || "Default";
-            document.getElementById('activeModelTitle').textContent = `${provider.toUpperCase()} / ${model}`;
+        // ---------- Agent status ----------
+        async function refreshStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                agentStatus = data.agents || {};
+            } catch (e) {
+                agentStatus = {};
+            }
+            if (configData) renderAgentList();
+            renderHeaderStatus();
+            clearTimeout(statusTimer);
+            const anyConnecting = Object.values(agentStatus).some(s => s.state === 'connecting');
+            statusTimer = setTimeout(refreshStatus, anyConnecting ? 4000 : 30000);
         }
 
+        function renderHeaderStatus() {
+            const pill = $('statusPill');
+            if (!activeAgentName) { pill.hidden = true; return; }
+            const status = agentStatus[activeAgentName] || { state: 'idle' };
+            pill.hidden = false;
+            pill.className = 'status-pill ' + status.state;
+            $('statusDot').className = 'status-dot ' + status.state;
+            let label = STATUS_LABELS[status.state] || status.state;
+            if (status.state === 'ready' && status.tools !== undefined) label += ` · ${plural(status.tools, 'tool')}`;
+            $('statusText').textContent = label;
+            pill.title = status.message || label;
+        }
+
+        // ---------- Settings ----------
+        function handleProviderChange(isInitial = false) {
+            const provider = $('providerSelect').value;
+            const apiKeyInput = $('apiKeyInput');
+            const hint = $('apiKeyHint');
+
+            $('modelInput').value = configData.models[provider] || '';
+            hint.className = 'field-hint';
+
+            if (provider === 'ollama') {
+                $('apiKeyLabel').textContent = 'Ollama URL';
+                apiKeyInput.type = 'text';
+                apiKeyInput.value = configData.ollama_url || '';
+                apiKeyInput.placeholder = 'http://ollama:11434';
+                $('apiKeyToggle').hidden = true;
+                hint.textContent = 'Where the local Ollama server runs.';
+            } else {
+                $('apiKeyLabel').textContent = 'API key';
+                apiKeyInput.type = 'password';
+                apiKeyInput.value = '';
+                $('apiKeyToggle').hidden = false;
+                $('apiKeyIcon').className = 'fa-solid fa-eye-slash';
+                if (configData.server_keys && configData.server_keys[provider]) {
+                    apiKeyInput.placeholder = 'Using server key';
+                    hint.textContent = '✓ A key is configured on the server. Leave empty to use it.';
+                    hint.className = 'field-hint ok';
+                } else {
+                    apiKeyInput.placeholder = 'Paste your API key';
+                    hint.textContent = 'No key on the server: enter one to use this provider.';
+                }
+            }
+
+            updateModelChip();
+            if (!isInitial) initializeOrFetchTools();
+        }
+
+        function handleModelOrKeyChange() {
+            updateModelChip();
+            initializeOrFetchTools();
+        }
+
+        function updateModelChip() {
+            const provider = $('providerSelect').value;
+            const model = $('modelInput').value || 'default';
+            $('modelChip').textContent = `${provider} · ${model}`;
+        }
+
+        function toggleApiKeyVisibility() {
+            const input = $('apiKeyInput');
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            $('apiKeyIcon').className = show ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
+        }
+
+        function llmSettings() {
+            return {
+                provider: $('providerSelect').value,
+                model: $('modelInput').value,
+                api_key: $('apiKeyInput').value
+            };
+        }
+
+        // ---------- Sidebar ----------
+        function toggleSidebar(forceState) {
+            const sidebar = $('sidebar');
+            const open = forceState !== undefined ? forceState : !sidebar.classList.contains('open');
+            sidebar.classList.toggle('open', open);
+            $('overlay').classList.toggle('active', open);
+        }
+
+        function handleGlobalKeys(e) {
+            if (e.key === 'Escape') toggleSidebar(false);
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                newChat();
+            }
+        }
+
+        // ---------- Agents & chats ----------
+        async function selectAgent(agentName) {
+            if (activeAgentName === agentName) { toggleSidebar(false); return; }
+            activeAgentName = agentName;
+            store('mcp.agent', agentName);
+            renderAgentList();
+            toggleSidebar(false);
+
+            $('agentTitle').textContent = agentLabel(agentName) + ' agent';
+            renderHeaderStatus();
+            ['newChatBtn', 'reconnectBtn', 'clearBtn'].forEach(id => $(id).disabled = false);
+            $('chatInput').disabled = false;
+            $('chatInput').placeholder = `Message the ${agentLabel(agentName)} agent…`;
+            $('sendBtn').disabled = false;
+
+            const sessions = await refreshChatList();
+            const remembered = load('mcp.session.' + agentName);
+            const known = sessions.some(s => s.session_id === remembered);
+            activeSessionId = known ? remembered : (sessions[0] ? sessions[0].session_id : newSessionId());
+            store('mcp.session.' + agentName, activeSessionId);
+            renderChatList(sessions);
+            await loadSessionMessages();
+            initializeOrFetchTools();
+        }
+
+        async function refreshChatList() {
+            if (!activeAgentName) return [];
+            try {
+                const res = await fetch(`/api/sessions/${encodeURIComponent(activeAgentName)}`);
+                const data = await res.json();
+                const sessions = (data.sessions || []).filter(s => s.message_count > 0);
+                renderChatList(sessions);
+                return sessions;
+            } catch (e) {
+                console.error('Failed to load chats:', e);
+                return [];
+            }
+        }
+
+        function renderChatList(sessions) {
+            const list = $('chatList');
+            list.innerHTML = '';
+            if (!sessions.length) {
+                list.appendChild(el('div', 'empty-note', 'No chats yet.'));
+                return;
+            }
+            sessions.forEach(s => {
+                const row = el('div', 'chat-item' + (s.session_id === activeSessionId ? ' active' : ''));
+                const open = el('button', 'chat-open');
+                open.type = 'button';
+                open.onclick = () => openChat(s.session_id);
+                open.append(el('span', 'chat-title', s.title || 'New chat'), el('span', 'chat-time', relativeTime(s.updated_at)));
+                const del = el('button', 'chat-delete');
+                del.type = 'button';
+                del.setAttribute('aria-label', 'Delete chat');
+                del.title = 'Delete chat';
+                del.appendChild(icon('fa-regular fa-trash-can'));
+                del.onclick = (e) => { e.stopPropagation(); deleteChat(s.session_id); };
+                row.append(open, del);
+                list.appendChild(row);
+            });
+        }
+
+        async function openChat(sessionId) {
+            if (isGenerating) return;
+            activeSessionId = sessionId;
+            store('mcp.session.' + activeAgentName, sessionId);
+            await refreshChatList();
+            await loadSessionMessages();
+            toggleSidebar(false);
+        }
+
+        async function newChat() {
+            if (!activeAgentName || isGenerating) return;
+            activeSessionId = newSessionId();
+            store('mcp.session.' + activeAgentName, activeSessionId);
+            await refreshChatList();
+            renderWelcome();
+            toggleSidebar(false);
+            $('chatInput').focus();
+        }
+
+        async function deleteChat(sessionId) {
+            if (!confirm('Delete this chat? This cannot be undone.')) return;
+            try {
+                await fetch(`/api/sessions/${encodeURIComponent(activeAgentName)}/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+            } catch (e) { console.error('Delete failed:', e); }
+            if (sessionId === activeSessionId) {
+                activeSessionId = newSessionId();
+                store('mcp.session.' + activeAgentName, activeSessionId);
+                renderWelcome();
+            }
+            await refreshChatList();
+        }
+
+        function clearActiveSession() {
+            if (activeAgentName && activeSessionId) deleteChat(activeSessionId);
+        }
+
+        // ---------- Tools ----------
         async function initializeOrFetchTools() {
             if (!activeAgentName) return;
-
-            const provider = document.getElementById('providerSelect').value;
-            const model = document.getElementById('modelInput').value;
-            const api_key = document.getElementById('apiKeyInput').value;
-
-            const toolsList = document.getElementById('toolsList');
-            toolsList.innerHTML = `
-                <div style="font-size:0.75rem; color:var(--text-dim); text-align:center; padding:10px;">
-                    <i class="fa-solid fa-spinner fa-spin"></i> Initializing agent & fetching tools...
-                </div>
-            `;
+            const toolsList = $('toolsList');
+            toolsList.innerHTML = '';
+            toolsList.appendChild(el('div', 'tools-note', 'Connecting and loading tools…'));
+            agentStatus[activeAgentName] = { state: 'connecting', message: 'Loading tools…' };
+            renderHeaderStatus();
+            renderAgentList();
 
             try {
-                const res = await fetch(`/api/agent/${activeAgentName}/tools`, {
+                const res = await fetch(`/api/agent/${encodeURIComponent(activeAgentName)}/tools`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ provider, model, api_key })
+                    body: JSON.stringify(llmSettings())
                 });
-                
-                if (!res.ok) {
-                    throw new Error(await res.text());
-                }
-
-                const data = await res.json();
-                const tools = data.tools || [];
-                
-                document.getElementById('toolCount').textContent = tools.length;
-
+                if (!res.ok) throw new Error(await errorDetail(res));
+                const tools = (await res.json()).tools || [];
+                $('toolCount').textContent = tools.length;
                 toolsList.innerHTML = '';
-                if (tools.length === 0) {
-                    toolsList.innerHTML = `
-                        <div style="font-size:0.75rem; color:var(--text-dim); text-align:center; padding:10px;">
-                            No tools found.
-                        </div>
-                    `;
-                    return;
-                }
-
+                if (!tools.length) toolsList.appendChild(el('div', 'tools-note', 'No tools found.'));
                 tools.forEach(t => {
-                    const badge = document.createElement('div');
-                    badge.className = 'tool-badge';
-                    badge.title = t.description || 'No description available';
-                    badge.innerHTML = `
-                        <span class="tool-name">${t.name}</span>
-                        <i class="fa-solid fa-circle-info tool-info-icon"></i>
-                    `;
-                    toolsList.appendChild(badge);
+                    const row = el('div', 'tool-row', t.name);
+                    row.title = t.description || 'No description available';
+                    toolsList.appendChild(row);
                 });
-
             } catch (err) {
-                console.error("Failed to retrieve tools:", err);
-                
-                let displayMsg = "Initialization failed. Verify credentials.";
-                try {
-                    const errObj = JSON.parse(err.message);
-                    if (errObj && errObj.detail) {
-                        displayMsg = errObj.detail;
-                    }
-                } catch (e) {
-                    if (err.message) {
-                        displayMsg = err.message;
-                    }
-                }
-
-                toolsList.innerHTML = `
-                    <div style="font-size:0.72rem; color:var(--error); text-align:center; padding:10px;">
-                        ${displayMsg}
-                    </div>
-                `;
-                document.getElementById('toolCount').textContent = '0';
+                $('toolCount').textContent = '0';
+                toolsList.innerHTML = '';
+                toolsList.appendChild(el('div', 'tools-note error', err.message || 'Could not connect. Check the credentials.'));
             }
+            await refreshStatus();
+        }
+
+        async function errorDetail(res) {
+            const text = await res.text();
+            try {
+                const data = JSON.parse(text);
+                if (data && data.detail) return typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+            } catch (e) {}
+            return text || `HTTP ${res.status}`;
+        }
+
+        // ---------- Messages ----------
+        function renderWelcome() {
+            const pane = $('chatPane');
+            pane.innerHTML = '';
+            const wrap = el('div', 'welcome');
+            const iconBox = el('div', 'welcome-icon');
+            iconBox.appendChild(icon(AGENT_ICONS[activeAgentName] || 'fa-solid fa-comments'));
+            wrap.append(iconBox,
+                el('h2', '', `${agentLabel(activeAgentName)} agent`),
+                el('p', '', `${AGENT_DESCRIPTIONS[activeAgentName] || 'MCP agent'}. Ask a question and the agent calls its MCP tools to answer. Try one of these:`));
+            const grid = el('div', 'prompt-grid');
+            (SUGGESTIONS[activeAgentName] || []).forEach(prompt => {
+                const card = el('button', 'prompt-card');
+                card.type = 'button';
+                card.append(icon('fa-solid fa-arrow-right'), document.createTextNode(prompt));
+                // Fills the box instead of sending, so actions (e.g. sending to Slack) are deliberate
+                card.onclick = () => {
+                    const input = $('chatInput');
+                    input.value = prompt;
+                    input.dispatchEvent(new Event('input'));
+                    input.focus();
+                };
+                grid.appendChild(card);
+            });
+            wrap.appendChild(grid);
+            pane.appendChild(wrap);
         }
 
         async function loadSessionMessages() {
-            const chatPane = document.getElementById('chatPane');
-            chatPane.innerHTML = `
-                <div style="margin: auto; color: var(--text-muted);">
-                    <i class="fa-solid fa-spinner fa-spin"></i> Loading chat history...
-                </div>
-            `;
-
+            const pane = $('chatPane');
+            pane.innerHTML = '';
+            pane.appendChild(el('div', 'loading-note', 'Loading chat…'));
             try {
-                const res = await fetch(`/api/sessions/${activeAgentName}/${activeSessionId}/messages`);
-                const data = await res.json();
-                const messages = data.messages || [];
-
-                chatPane.innerHTML = '';
-
-                if (messages.length === 0) {
-                    // Show introductory message
-                    appendMessage('agent', `Hello! I am your **${activeAgentName.toUpperCase()}** MCP agent. Ask me anything, and I'll invoke relevant tools to help you!`);
-                } else {
-                    messages.forEach(m => {
-                        appendMessage(m.sender, m.text);
-                    });
-                }
+                const res = await fetch(`/api/sessions/${encodeURIComponent(activeAgentName)}/${encodeURIComponent(activeSessionId)}/messages`);
+                const messages = (await res.json()).messages || [];
+                if (!messages.length) { renderWelcome(); return; }
+                pane.innerHTML = '';
+                messages.forEach(m => appendMessage(m.sender, m.text));
                 scrollChatToBottom();
             } catch (err) {
-                console.error("Error loading messages:", err);
-                chatPane.innerHTML = '';
-                appendMessage('agent', 'Failed to retrieve conversation history.');
+                pane.innerHTML = '';
+                showAlert('Could not load this chat', 'The conversation history could not be retrieved.');
             }
         }
 
-        function appendMessage(sender, text) {
-            const chatPane = document.getElementById('chatPane');
-            
-            // Remove empty state if present
-            const emptyState = document.getElementById('emptyState');
-            if (emptyState) emptyState.remove();
+        function clearWelcome() {
+            const pane = $('chatPane');
+            if (pane.querySelector('.welcome, .loading-note')) pane.innerHTML = '';
+        }
 
-            const msgRow = document.createElement('div');
-            msgRow.className = `msg-row ${sender}`;
+        function appendMessage(sender, text, meta) {
+            clearWelcome();
+            const row = el('div', 'msg ' + sender);
+            const body = el('div', 'msg-body');
 
-            const bubble = document.createElement('div');
-            bubble.className = 'msg-bubble';
-            
-            // Render markdown beautifully if sender is agent
-            if (sender === 'agent') {
-                bubble.innerHTML = marked.parse(text);
+            if (sender === 'user') {
+                body.appendChild(el('div', 'user-bubble', text));
+                row.appendChild(body);
             } else {
-                bubble.textContent = text;
+                const avatar = el('div', 'avatar');
+                avatar.appendChild(icon(AGENT_ICONS[activeAgentName] || 'fa-solid fa-robot'));
+                const card = el('div', 'agent-card');
+                card.appendChild(renderMarkdown(text));
+                body.appendChild(card);
+
+                const metaRow = el('div', 'msg-meta');
+                const parts = [];
+                if (meta && meta.model) parts.push(meta.model);
+                if (meta && meta.elapsed !== undefined && meta.elapsed !== null) parts.push(`${Number(meta.elapsed).toFixed(1)}s`);
+                if (meta && meta.time) parts.push(meta.time);
+                parts.forEach((p, i) => {
+                    if (i) metaRow.appendChild(el('span', 'sep', '·'));
+                    metaRow.appendChild(el('span', '', p));
+                });
+                const copy = el('button', 'copy-btn');
+                copy.type = 'button';
+                copy.innerHTML = '<i class="fa-regular fa-copy" aria-hidden="true"></i> Copy';
+                copy.onclick = () => copyText(text, copy);
+                metaRow.appendChild(copy);
+                body.appendChild(metaRow);
+                row.append(avatar, body);
             }
-
-            msgRow.appendChild(bubble);
-            chatPane.appendChild(msgRow);
+            $('chatPane').appendChild(row);
             scrollChatToBottom();
         }
 
-        function showTypingIndicator() {
-            const chatPane = document.getElementById('chatPane');
-            const row = document.createElement('div');
-            row.className = 'msg-row agent';
-            row.id = 'typingIndicator';
-
-            row.innerHTML = `
-                <div class="msg-bubble typing-bubble">
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
-                </div>
-            `;
-            chatPane.appendChild(row);
+        function showAlert(title, detail) {
+            clearWelcome();
+            const box = el('div', 'alert');
+            box.setAttribute('role', 'alert');
+            box.appendChild(icon('fa-solid fa-circle-exclamation'));
+            const text = el('div');
+            text.append(el('strong', '', title), el('div', 'alert-text', detail));
+            box.appendChild(text);
+            $('chatPane').appendChild(box);
             scrollChatToBottom();
         }
 
-        function removeTypingIndicator() {
-            const indicator = document.getElementById('typingIndicator');
-            if (indicator) indicator.remove();
+        function showThinking() {
+            const row = el('div', 'msg agent');
+            row.id = 'thinking';
+            const avatar = el('div', 'avatar');
+            avatar.appendChild(icon(AGENT_ICONS[activeAgentName] || 'fa-solid fa-robot'));
+            const body = el('div', 'msg-body');
+            const box = el('div', 'agent-card thinking');
+            const dots = el('span', 'dots');
+            dots.innerHTML = '<span></span><span></span><span></span>';
+            const label = el('span', '', 'Thinking… 0s');
+            box.append(dots, label);
+            body.appendChild(box);
+            row.append(avatar, body);
+            $('chatPane').appendChild(row);
+            scrollChatToBottom();
+            const started = Date.now();
+            // Local CPU models can take a while: show that work is in progress
+            const timer = setInterval(() => {
+                const s = Math.floor((Date.now() - started) / 1000);
+                label.textContent = s < 20 ? `Thinking… ${s}s` : `Still working… ${s}s (local models can be slow)`;
+            }, 1000);
+            return () => { clearInterval(timer); row.remove(); };
         }
 
         async function sendChatMessage() {
             if (!activeAgentName || isGenerating) return;
-
-            const inputEl = document.getElementById('chatInput');
-            const text = inputEl.value.trim();
+            const input = $('chatInput');
+            const text = input.value.trim();
             if (!text) return;
 
-            // Clear input and lock UI
-            inputEl.value = '';
-            inputEl.style.height = '38px';
-            toggleInputState(true);
-
-            // Append User Message
+            input.value = '';
+            input.style.height = 'auto';
+            setGenerating(true);
             appendMessage('user', text);
-            showTypingIndicator();
-
-            const provider = document.getElementById('providerSelect').value;
-            const model = document.getElementById('modelInput').value;
-            const api_key = document.getElementById('apiKeyInput').value;
+            const stopThinking = showThinking();
+            const settings = llmSettings();
 
             try {
                 const res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        agent_name: activeAgentName,
-                        message: text,
-                        session_id: activeSessionId,
-                        provider,
-                        model,
-                        api_key
-                    })
+                    body: JSON.stringify({ agent_name: activeAgentName, message: text, session_id: activeSessionId, ...settings })
                 });
-
-                removeTypingIndicator();
-
+                stopThinking();
                 if (!res.ok) {
-                    const errText = await res.text();
-                    appendMessage('agent', `⚠️ **Error occurred:** ${errText}`);
+                    showAlert('The agent could not answer', await errorDetail(res));
                 } else {
                     const data = await res.json();
-                    appendMessage('agent', data.response);
+                    appendMessage('agent', data.response, {
+                        model: settings.model || settings.provider,
+                        elapsed: data.elapsed_seconds,
+                        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    });
                 }
-
             } catch (err) {
-                removeTypingIndicator();
-                appendMessage('agent', `⚠️ **Network failure:** Could not communicate with server.`);
+                stopThinking();
+                showAlert('Network error', 'Could not reach the server. Check your connection and try again.');
             } finally {
-                toggleInputState(false);
-                inputEl.focus();
+                setGenerating(false);
+                refreshChatList();
+                input.focus();
             }
         }
 
-        async function clearActiveSession() {
-            if (!activeAgentName) return;
-            
-            try {
-                await fetch(`/api/sessions/${activeAgentName}/${activeSessionId}`, { method: 'DELETE' });
-                await loadSessionMessages();
-            } catch (err) {
-                console.error("Failed to clear session:", err);
-            }
-        }
-
-        // Toggle state helpers
-        function toggleInputState(disabled) {
-            isGenerating = disabled;
-            document.getElementById('chatInput').disabled = disabled;
-            document.getElementById('sendBtn').disabled = disabled || !activeAgentName;
+        function setGenerating(on) {
+            isGenerating = on;
+            $('chatInput').disabled = on;
+            $('sendBtn').disabled = on || !activeAgentName;
+            $('newChatBtn').disabled = on || !activeAgentName;
         }
 
         function handleInputKeydown(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
                 e.preventDefault();
                 sendChatMessage();
             }
         }
 
-        function toggleApiKeyVisibility() {
-            const input = document.getElementById('apiKeyInput');
-            const icon = document.getElementById('apiKeyVisibilityIcon');
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.className = 'fa-solid fa-eye';
-            } else {
-                input.type = 'password';
-                icon.className = 'fa-solid fa-eye-slash';
-            }
-        }
-
         function scrollChatToBottom() {
-            const pane = document.getElementById('chatPane');
-            pane.scrollTop = pane.scrollHeight;
+            const scroller = $('chatScroll');
+            scroller.scrollTop = scroller.scrollHeight;
         }
 
         function setupAutoResize() {
-            const textarea = document.getElementById('chatInput');
+            const textarea = $('chatInput');
             textarea.addEventListener('input', () => {
                 textarea.style.height = 'auto';
-                textarea.style.height = (textarea.scrollHeight - 4) + 'px';
+                textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
             });
         }
     </script>

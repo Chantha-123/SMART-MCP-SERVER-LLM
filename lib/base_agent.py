@@ -604,7 +604,7 @@ def _matches_tool_name(tool_name: str, enabled_names: set[str]) -> bool:
     return any(stripped == _strip_tool_prefix(en) for en in enabled_names)
 
 
-_RESPONSE_TIME_LINE = re.compile(r"\n*⏱️ \*Response time: [0-9.]+ seconds\*")
+RESPONSE_TIME_LINE = re.compile(r"\n*⏱️ \*Response time: [0-9.]+ seconds\*")
 
 
 def sanitize_session_history(
@@ -633,9 +633,9 @@ def sanitize_session_history(
                     sanitized.append(AIMessage(content=content, tool_calls=valid_calls))
                 else:
                     sanitized.append(msg)
-            elif isinstance(msg.content, str) and _RESPONSE_TIME_LINE.search(msg.content):
+            elif isinstance(msg.content, str) and RESPONSE_TIME_LINE.search(msg.content):
                 # Sessions saved by older versions include the UI timing line; models copy it
-                sanitized.append(AIMessage(content=_RESPONSE_TIME_LINE.sub("", msg.content).rstrip()))
+                sanitized.append(AIMessage(content=RESPONSE_TIME_LINE.sub("", msg.content).rstrip()))
             else:
                 sanitized.append(msg)
         elif isinstance(msg, ToolMessage):
