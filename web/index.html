@@ -199,7 +199,7 @@
         .agent-item {
             display: flex; align-items: center; gap: 10px;
             width: 100%;
-            padding: 8px 8px;
+            padding: 6px 8px;
             border: 1px solid transparent;
             border-radius: var(--radius-sm);
             background: transparent;
@@ -209,7 +209,7 @@
         .agent-item:hover { background: var(--surface-hover); }
         .agent-item.active { background: var(--accent-soft); border-color: transparent; }
         .agent-icon {
-            width: 30px; height: 30px; flex-shrink: 0;
+            width: 28px; height: 28px; flex-shrink: 0;
             border-radius: 8px;
             display: grid; place-items: center;
             background: var(--surface-2);
@@ -227,6 +227,14 @@
         .status-dot.error { background: var(--danger); }
         @keyframes pulse { 50% { opacity: 0.35; } }
 
+        .chat-search { position: relative; margin: 0 0 8px; }
+        .chat-search i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-dim); font-size: 12px; }
+        .chat-search .input { padding: 6px 10px 6px 30px; font-size: 12.5px; }
+        .chat-group-title {
+            font-size: 11px; font-weight: 600; color: var(--text-dim);
+            padding: 10px 8px 4px;
+        }
+        .chat-group-title:first-child { padding-top: 2px; }
         .chat-item {
             display: flex; align-items: center; gap: 6px;
             border-radius: var(--radius-sm);
@@ -239,8 +247,12 @@
             padding: 7px 8px;
             border: 0; background: transparent; text-align: left;
         }
-        .chat-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
-        .chat-time { display: block; font-size: 11px; color: var(--text-dim); }
+        .chat-title {
+            font-size: 13px; line-height: 1.35;
+            display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical;
+            overflow: hidden; overflow-wrap: anywhere;
+        }
+        .chat-time { display: block; font-size: 11px; color: var(--text-dim); margin-top: 2px; }
         .chat-delete {
             border: 0; background: transparent; color: var(--text-dim);
             width: 28px; height: 28px; border-radius: 6px; margin-right: 4px;
@@ -378,7 +390,7 @@
         .tools-empty { text-align: center; color: var(--text-dim); padding: 32px 0; font-size: 13px; }
 
         /* ---------- Main ---------- */
-        .main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+        .main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; position: relative; }
         .header {
             height: var(--header-height);
             flex-shrink: 0;
@@ -457,7 +469,7 @@
             white-space: pre-wrap;
             overflow-wrap: anywhere;
         }
-        .msg.user .msg-body { display: flex; justify-content: flex-end; }
+        .msg.user .msg-body { display: flex; }
         .agent-card {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -472,6 +484,26 @@
             font-size: 12px; color: var(--text-dim);
         }
         .msg-meta .sep { opacity: 0.5; }
+        .msg.user .msg-body { flex-direction: column; align-items: flex-end; }
+        .msg.user .msg-meta { padding-right: 2px; padding-left: 0; margin-top: 4px; }
+
+        /* "Today" / "Sep 26" between messages from different days */
+        .date-divider {
+            display: flex; align-items: center; gap: 12px;
+            font-size: 11px; font-weight: 600; color: var(--text-dim);
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .date-divider::before, .date-divider::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
+
+        .jump-btn {
+            position: absolute; left: 50%; bottom: 112px; transform: translateX(-50%);
+            z-index: 5;
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 12px; border-radius: 20px;
+            border: 1px solid var(--border-strong); background: var(--surface);
+            color: var(--text-muted); font-size: 12px; box-shadow: var(--shadow-md);
+        }
+        .jump-btn:hover { color: var(--text); }
         .copy-btn {
             border: 0; background: transparent; color: var(--text-dim);
             font-size: 12px; padding: 2px 6px; border-radius: 5px;
@@ -597,6 +629,11 @@
 
                 <section>
                     <div class="section-label">Chats</div>
+                    <div class="chat-search" id="chatSearchBox" hidden>
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                        <label for="chatSearch" class="sr-only">Search chats</label>
+                        <input id="chatSearch" class="input" type="search" placeholder="Search chats" autocomplete="off" oninput="renderChatList(chatSessions)">
+                    </div>
                     <div class="chat-list" id="chatList">
                         <div class="empty-note">Select an agent to see its chats.</div>
                     </div>
@@ -659,6 +696,9 @@
                 </div>
             </header>
 
+            <button type="button" class="jump-btn" id="jumpBtn" hidden onclick="scrollChatToBottom(true)">
+                <i class="fa-solid fa-arrow-down" aria-hidden="true"></i> Jump to latest
+            </button>
             <div class="chat-scroll" id="chatScroll">
                 <div class="chat-inner" id="chatPane" aria-live="polite">
                     <div class="welcome">
@@ -768,13 +808,34 @@
             i.setAttribute('aria-hidden', 'true');
             return i;
         }
-        function relativeTime(iso) {
+        // ---------- Dates (all shown in the viewer's local time) ----------
+        function startOfDay(date) { const d = new Date(date); d.setHours(0, 0, 0, 0); return d; }
+        function daysAgo(iso) { return Math.round((startOfDay(new Date()) - startOfDay(new Date(iso))) / 86400000); }
+        function clockTime(iso) { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+        function shortDate(iso) {
+            const d = new Date(iso);
+            const opts = { month: 'short', day: 'numeric' };
+            if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+            return d.toLocaleDateString([], opts);
+        }
+        // "14:02" today, "Sep 26, 18:40" before
+        function messageTime(iso) {
             if (!iso) return '';
-            const seconds = (Date.now() - new Date(iso).getTime()) / 1000;
-            if (seconds < 60) return 'just now';
-            if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
-            if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
-            return new Date(iso).toLocaleDateString();
+            return daysAgo(iso) === 0 ? clockTime(iso) : `${shortDate(iso)}, ${clockTime(iso)}`;
+        }
+        function chatGroup(iso) {
+            if (!iso) return 'Older';
+            const days = daysAgo(iso);
+            if (days <= 0) return 'Today';
+            if (days === 1) return 'Yesterday';
+            if (days < 7) return 'Previous 7 days';
+            return 'Older';
+        }
+        function dayLabel(iso) {
+            const days = daysAgo(iso);
+            if (days === 0) return 'Today';
+            if (days === 1) return 'Yesterday';
+            return shortDate(iso);
         }
         function newSessionId() { return 'chat-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
         async function copyText(text, button) {
@@ -824,6 +885,7 @@
         // ---------- Startup ----------
         window.addEventListener('DOMContentLoaded', async () => {
             setupAutoResize();
+            setupJumpButton();
             document.addEventListener('keydown', handleGlobalKeys);
             updateMenuButton();
             mobileQuery.addEventListener('change', () => { toggleSidebar(false); updateMenuButton(); });
@@ -1060,19 +1122,40 @@
             }
         }
 
+        let chatSessions = [];
+
         function renderChatList(sessions) {
+            chatSessions = sessions;
             const list = $('chatList');
             list.innerHTML = '';
+            // Search appears once the list gets long
+            $('chatSearchBox').hidden = sessions.length <= 5;
             if (!sessions.length) {
                 list.appendChild(el('div', 'empty-note', 'No chats yet.'));
                 return;
             }
-            sessions.forEach(s => {
+            const query = $('chatSearchBox').hidden ? '' : $('chatSearch').value.trim().toLowerCase();
+            const visible = sessions.filter(s => !query || (s.title || '').toLowerCase().includes(query));
+            if (!visible.length) {
+                list.appendChild(el('div', 'empty-note', `No chats match “${query}”.`));
+                return;
+            }
+
+            let currentGroup = null;
+            visible.forEach(s => {
+                // Sessions arrive newest first, so groups come out in order
+                const group = chatGroup(s.updated_at);
+                if (group !== currentGroup) {
+                    list.appendChild(el('div', 'chat-group-title', group));
+                    currentGroup = group;
+                }
                 const row = el('div', 'chat-item' + (s.session_id === activeSessionId ? ' active' : ''));
                 const open = el('button', 'chat-open');
                 open.type = 'button';
+                open.title = s.title || 'New chat';
                 open.onclick = () => openChat(s.session_id);
-                open.append(el('span', 'chat-title', s.title || 'New chat'), el('span', 'chat-time', relativeTime(s.updated_at)));
+                const details = [messageTime(s.updated_at), plural(s.message_count || 0, 'message')].filter(Boolean).join(' · ');
+                open.append(el('span', 'chat-title', s.title || 'New chat'), el('span', 'chat-time', details));
                 const del = el('button', 'chat-delete');
                 del.type = 'button';
                 del.setAttribute('aria-label', 'Delete chat');
@@ -1321,7 +1404,7 @@
         // ---------- Messages ----------
         function renderWelcome() {
             const pane = $('chatPane');
-            pane.innerHTML = '';
+            resetPane();
             const wrap = el('div', 'welcome');
             const iconBox = el('div', 'welcome-icon');
             iconBox.appendChild(icon(AGENT_ICONS[activeAgentName] || 'fa-solid fa-comments'));
@@ -1348,33 +1431,53 @@
 
         async function loadSessionMessages() {
             const pane = $('chatPane');
-            pane.innerHTML = '';
+            resetPane();
             pane.appendChild(el('div', 'loading-note', 'Loading chat…'));
             try {
                 const res = await fetch(`/api/sessions/${encodeURIComponent(activeAgentName)}/${encodeURIComponent(activeSessionId)}/messages`);
                 const messages = (await res.json()).messages || [];
                 if (!messages.length) { renderWelcome(); return; }
-                pane.innerHTML = '';
-                messages.forEach(m => appendMessage(m.sender, m.text));
+                resetPane();
+                messages.forEach(m => appendMessage(m.sender, m.text, { iso: m.time }));
                 scrollChatToBottom();
             } catch (err) {
-                pane.innerHTML = '';
+                resetPane();
                 showAlert('Could not load this chat', 'The conversation history could not be retrieved.');
             }
         }
 
-        function clearWelcome() {
+        function resetPane() {
             const pane = $('chatPane');
-            if (pane.querySelector('.welcome, .loading-note')) pane.innerHTML = '';
+            pane.innerHTML = '';
+            delete pane.dataset.lastDay;
         }
 
-        function appendMessage(sender, text, meta) {
+        function clearWelcome() {
+            if ($('chatPane').querySelector('.welcome, .loading-note')) resetPane();
+        }
+
+        // meta: { iso, model, elapsed }. iso is when the message was said (absent for
+        // messages saved before timestamps were recorded).
+        function appendMessage(sender, text, meta = {}) {
             clearWelcome();
+            const pane = $('chatPane');
+            if (meta.iso) {
+                const day = startOfDay(new Date(meta.iso)).toDateString();
+                if (pane.dataset.lastDay !== day) {
+                    pane.appendChild(el('div', 'date-divider', dayLabel(meta.iso)));
+                    pane.dataset.lastDay = day;
+                }
+            }
             const row = el('div', 'msg ' + sender);
             const body = el('div', 'msg-body');
 
             if (sender === 'user') {
                 body.appendChild(el('div', 'user-bubble', text));
+                if (meta.iso) {
+                    const metaRow = el('div', 'msg-meta');
+                    metaRow.appendChild(el('span', '', clockTime(meta.iso)));
+                    body.appendChild(metaRow);
+                }
                 row.appendChild(body);
             } else {
                 const avatar = el('div', 'avatar');
@@ -1385,9 +1488,9 @@
 
                 const metaRow = el('div', 'msg-meta');
                 const parts = [];
-                if (meta && meta.model) parts.push(meta.model);
-                if (meta && meta.elapsed !== undefined && meta.elapsed !== null) parts.push(`${Number(meta.elapsed).toFixed(1)}s`);
-                if (meta && meta.time) parts.push(meta.time);
+                if (meta.iso) parts.push(clockTime(meta.iso));
+                if (meta.model) parts.push(meta.model);
+                if (meta.elapsed !== undefined && meta.elapsed !== null) parts.push(`${Number(meta.elapsed).toFixed(1)}s`);
                 parts.forEach((p, i) => {
                     if (i) metaRow.appendChild(el('span', 'sep', '·'));
                     metaRow.appendChild(el('span', '', p));
@@ -1449,7 +1552,7 @@
             input.value = '';
             input.style.height = 'auto';
             setGenerating(true);
-            appendMessage('user', text);
+            appendMessage('user', text, { iso: new Date().toISOString() });
             const stopThinking = showThinking();
             const settings = llmSettings();
 
@@ -1467,7 +1570,7 @@
                     appendMessage('agent', data.response, {
                         model: settings.model || settings.provider,
                         elapsed: data.elapsed_seconds,
-                        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        iso: new Date().toISOString()
                     });
                 }
             } catch (err) {
@@ -1494,9 +1597,19 @@
             }
         }
 
-        function scrollChatToBottom() {
+        function scrollChatToBottom(smooth = false) {
             const scroller = $('chatScroll');
-            scroller.scrollTop = scroller.scrollHeight;
+            scroller.scrollTo({ top: scroller.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+            $('jumpBtn').hidden = true;
+        }
+
+        // "Jump to latest" appears when scrolled up from the newest message
+        function setupJumpButton() {
+            const scroller = $('chatScroll');
+            scroller.addEventListener('scroll', () => {
+                const fromBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+                $('jumpBtn').hidden = fromBottom < 300;
+            }, { passive: true });
         }
 
         function setupAutoResize() {

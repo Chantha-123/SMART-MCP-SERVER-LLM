@@ -154,6 +154,11 @@ class RuntimeState:
         message: BaseMessage,
     ) -> list[BaseMessage]:
         history = self._ensure_session(session_id)
+        # When it was said, for the dashboard. response_metadata is persisted with the
+        # message but never sent to the model.
+        metadata = getattr(message, "response_metadata", None)
+        if isinstance(metadata, dict) and "saved_at" not in metadata:
+            metadata["saved_at"] = _utc_timestamp()
         history.append(message)
         self._touch_session(session_id, persist=True)
         return history

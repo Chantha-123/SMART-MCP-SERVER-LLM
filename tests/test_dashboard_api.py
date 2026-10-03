@@ -91,5 +91,33 @@ class IconRouteTests(unittest.TestCase):
         self.assertIn('rel="apple-touch-icon" href="/apple-touch-icon.png"', html)
 
 
+class MessageTimeTests(unittest.TestCase):
+    def test_messages_endpoint_returns_saved_times(self) -> None:
+        with patch.dict(os.environ, {"MCP_DISABLE_PERSISTENCE": "1", "MCP_PRECONNECT": "false"}):
+            import web_server
+            from langchain_core.messages import HumanMessage
+            web_server.active_agents.clear()
+            state = web_server.get_active_agent("jira").state
+            state.record_message("timed", HumanMessage(content="List my jira projects"))
+            state.record_message("timed", AIMessage(content="MCP, SCRUM, SUP"))
+            messages = TestClient(web_server.app).get("/api/sessions/jira/timed/messages").json()["messages"]
+        self.assertEqual([m["sender"] for m in messages], ["user", "agent"])
+        for message in messages:
+            self.assertRegex(message["time"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
+
+    def test_timestamp_survives_save_and_reload(self) -> None:
+        import json
+        import tempfile
+        from langchain_core.messages import HumanMessage
+        from lib.state import RuntimeState
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.dict(os.environ, {"MCP_STATE_DIR": tmp, "MCP_DISABLE_PERSISTENCE": ""}):
+            first = RuntimeState("jira")
+            first.record_message("s1", HumanMessage(content="hi"))
+            saved_at = first.chat_sessions["s1"][0].response_metadata["saved_at"]
+            reloaded = RuntimeState("jira")
+            self.assertEqual(reloaded.chat_sessions["s1"][0].response_metadata["saved_at"], saved_at)
+
+
 if __name__ == "__main__":
     unittest.main()

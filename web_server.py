@@ -321,7 +321,9 @@ async def get_session_messages(agent_name: str, session_id: str):
                 content = RESPONSE_TIME_LINE.sub("", content).rstrip()
             formatted.append({
                 "sender": "user" if msg_type == "human" else "agent",
-                "text": content
+                "text": content,
+                # None for messages saved before timestamps were recorded
+                "time": (data.get("response_metadata") or {}).get("saved_at"),
             })
     return {"messages": formatted}
 
