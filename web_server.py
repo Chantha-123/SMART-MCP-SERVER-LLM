@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 # Load environment variables from .env if present
 load_dotenv()
 
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from typing import Dict, Any, List
 
@@ -324,6 +324,32 @@ async def get_session_messages(agent_name: str, session_id: str):
                 "text": content
             })
     return {"messages": formatted}
+
+WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
+
+# Browser tab / home-screen icons. Browsers request /favicon.ico by default, so it
+# serves the 32px PNG (modern browsers accept PNG content there).
+ICON_FILES = {
+    "/favicon.svg": ("favicon.svg", "image/svg+xml"),
+    "/favicon.ico": ("favicon-32.png", "image/png"),
+    "/favicon-32.png": ("favicon-32.png", "image/png"),
+    "/apple-touch-icon.png": ("apple-touch-icon.png", "image/png"),
+}
+
+
+def _icon_route(filename: str, media_type: str):
+    async def serve_icon():
+        return FileResponse(
+            os.path.join(WEB_DIR, filename),
+            media_type=media_type,
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    return serve_icon
+
+
+for _path, (_filename, _media_type) in ICON_FILES.items():
+    app.add_api_route(_path, _icon_route(_filename, _media_type), methods=["GET"], include_in_schema=False)
+
 
 @app.get("/")
 async def serve_index():

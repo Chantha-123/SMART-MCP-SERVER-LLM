@@ -69,5 +69,27 @@ class DashboardApiTests(unittest.TestCase):
         self.assertEqual(messages[1]["text"], "Hello!")
 
 
+class IconRouteTests(unittest.TestCase):
+    def test_icons_are_served_with_the_right_type(self) -> None:
+        import web_server
+        client = TestClient(web_server.app)
+        for path, media_type in {
+            "/favicon.svg": "image/svg+xml",
+            "/favicon.ico": "image/png",
+            "/favicon-32.png": "image/png",
+            "/apple-touch-icon.png": "image/png",
+        }.items():
+            res = client.get(path)
+            self.assertEqual(res.status_code, 200, path)
+            self.assertTrue(res.headers["content-type"].startswith(media_type), path)
+            self.assertGreater(len(res.content), 100, path)
+
+    def test_page_links_to_the_icons(self) -> None:
+        import web_server
+        html = TestClient(web_server.app).get("/").text
+        self.assertIn('rel="icon" href="/favicon.svg"', html)
+        self.assertIn('rel="apple-touch-icon" href="/apple-touch-icon.png"', html)
+
+
 if __name__ == "__main__":
     unittest.main()
