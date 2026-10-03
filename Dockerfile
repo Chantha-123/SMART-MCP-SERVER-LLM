@@ -29,15 +29,15 @@ COPY pyproject.toml requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system -r requirements.txt
 
-# Pre-install the stdio MCP servers so agents don't download them (uv run --with /
-# npx @latest) on every new container. Rebuild the image to update them.
+# Pre-install the stdio MCP servers (Jira, Slack, and GitHub for GITHUB_MCP_TRANSPORT=stdio)
+# so agents don't download them (uv run --with / npx) on every new container. Rebuild the image to update them.
 # Installed outside /root so a non-root runtime user (Hugging Face runs as UID 1000)
 # can execute them.
 ENV UV_TOOL_DIR=/opt/uv-tools \
     UV_TOOL_BIN_DIR=/usr/local/bin
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv tool install mcp-atlassian \
-    && npm install -g --no-fund --no-audit slack-mcp-server \
+    && npm install -g --no-fund --no-audit slack-mcp-server @modelcontextprotocol/server-github \
     && npm cache clean --force
 
 # Copy application files (see .dockerignore)

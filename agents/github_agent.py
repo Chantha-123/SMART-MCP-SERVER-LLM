@@ -1,4 +1,5 @@
 import os
+import shutil
 from typing import Any
 from lib.base_agent import BaseAgent
 from lib.base_transport import StdioTransportMixin
@@ -32,6 +33,11 @@ def _create_stdio_agent(required_vars: list[str]) -> BaseAgent:
                 "PATH": os.environ.get("PATH", ""),
                 "GITHUB_PERSONAL_ACCESS_TOKEN": os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN", ""),
             }
+            # Pre-installed binary (Docker image) avoids an npm download on every startup
+            installed = shutil.which("mcp-server-github")
+            if installed:
+                return self.build_stdio_config(installed, [], env)
+
             return self.build_stdio_config(
                 "npx",
                 ["-y", "@modelcontextprotocol/server-github"],

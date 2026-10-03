@@ -160,10 +160,32 @@ def get_schema_type(prop_schema: Any) -> str | None:
     return None
 
 
+# Names models commonly use for a parameter the tool calls differently
+# (e.g. GitHub's search_repositories takes `query`, but search_code takes `q`)
+_ARG_ALIASES: dict[str, tuple[str, ...]] = {
+    "query": ("q", "search", "search_query"),
+    "q": ("query", "search", "search_query"),
+}
+
+
+def _repair_arg_names(args: dict[str, Any], properties: dict[str, Any]) -> dict[str, Any]:
+    """Rename an aliased argument to the name the schema expects, if that name is missing."""
+    repaired = dict(args)
+    for expected, aliases in _ARG_ALIASES.items():
+        if expected not in properties or expected in repaired:
+            continue
+        for alias in aliases:
+            if alias in repaired and alias not in properties:
+                repaired[expected] = repaired.pop(alias)
+                break
+    return repaired
+
+
 def sanitize_args(args: dict[str, Any], schema: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(schema, dict) or "properties" not in schema:
         return args
     properties = schema["properties"]
+    args = _repair_arg_names(args, properties)
     sanitized_args = {}
     for key, value in args.items():
         if key not in properties:
@@ -230,15 +252,33 @@ class SanitizedTool(BaseTool):
     def _run(self, *args: Any, **kwargs: Any) -> Any:
         schema = self._get_effective_schema()
         sanitized_kwargs = sanitize_args(kwargs, schema)
-        return self._original_tool.invoke(sanitized_kwargs), None
+        try:
+            return self._original_tool.invoke(sanitized_kwargs), None
+        except Exception as exc:
+            return _tool_error_text(self.name, exc), None
 
     async def _arun(self, *args: Any, **kwargs: Any) -> Any:
         schema = self._get_effective_schema()
         sanitized_kwargs = sanitize_args(kwargs, schema)
-        result = await self._original_tool.ainvoke(sanitized_kwargs)
+        try:
+            result = await self._original_tool.ainvoke(sanitized_kwargs)
+        except Exception as exc:
+            # A rejected call (bad arguments, API error) goes back to the model as the
+            # tool result, so it can retry or explain, instead of failing the whole request
+            error = _tool_error_text(self.name, exc)
+            return error, error
         if _is_local_provider():
             result = compact_tool_output(result)
         return truncate_tool_output(result, _local_tool_output_limit()), result
+
+
+def _tool_error_text(tool_name: str, exc: Exception) -> str:
+    logger.warning(f"Tool '{tool_name}' failed: {exc}")
+    return (
+        f"Tool error from {tool_name}: {exc}\n"
+        "Check the argument names and values against the tool's schema and try again, "
+        "or tell the user what went wrong."
+    )
 
 
 def _is_local_provider() -> bool:
@@ -763,8 +803,9 @@ class BaseAgent:
         extra_instructions = ""
         if self.service_name == "github":
             extra_instructions = (
-                "\nGITHUB SEARCH INSTRUCTION: When calling search_repositories or search_code, "
-                "always pass a valid GitHub search query string `q` (e.g., `user:Chantha-123` or specific repo keywords). "
+                "\nGITHUB SEARCH INSTRUCTION: When calling a search tool, use the exact parameter names from that "
+                "tool's schema (they differ between tools and servers) and pass a real GitHub search string "
+                "(e.g., `user:Chantha-123` or specific repo keywords). "
                 "NEVER use invalid query placeholders like `user:me` or `user:my_username` because GitHub API will reject them with HTTP 422 error."
             )
 
