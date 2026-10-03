@@ -12,11 +12,15 @@
     <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
     <script>
-        // Apply the saved theme before first paint (no light/dark flash)
+        // Apply the saved theme and sidebar state before first paint (no flash)
         (function () {
-            let theme = null;
-            try { theme = localStorage.getItem('mcp.theme'); } catch (e) {}
+            let theme = null, sidebar = null;
+            try {
+                theme = localStorage.getItem('mcp.theme');
+                sidebar = localStorage.getItem('mcp.sidebar');
+            } catch (e) {}
             if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+            if (sidebar === 'collapsed') document.documentElement.classList.add('sidebar-collapsed');
         })();
     </script>
     <style>
@@ -135,6 +139,12 @@
             background: var(--surface);
             border-right: 1px solid var(--border);
             min-height: 0;
+        }
+        /* Desktop: the menu button hides the sidebar and the chat takes the full width.
+           visibility:hidden also keeps its controls out of the Tab order while hidden. */
+        @media (min-width: 861px) {
+            .sidebar { transition: margin-left 0.2s ease, visibility 0.2s; }
+            .sidebar-collapsed .sidebar { margin-left: calc(-1 * var(--sidebar-width)); visibility: hidden; }
         }
         .brand {
             display: flex;
@@ -277,19 +287,90 @@
         .field-hint { font-size: 11px; color: var(--text-dim); }
         .field-hint.ok { color: var(--success); }
 
-        .tools-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
-        .tool-row {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 12px;
-            padding: 5px 8px;
-            border-radius: 6px;
-            background: var(--surface-2);
+        /* Sidebar: one-line tools summary that opens the drawer */
+        .tools-summary {
+            width: 100%;
+            display: flex; align-items: center; gap: 10px;
+            padding: 11px 16px;
+            border: 0; background: transparent; text-align: left;
             color: var(--text-muted);
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-            cursor: help;
         }
-        .tools-note { font-size: 12px; color: var(--text-dim); }
-        .tools-note.error { color: var(--danger); white-space: normal; }
+        .tools-summary:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
+        .tools-summary:disabled { cursor: default; }
+        .ts-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .ts-title { font-size: 13px; font-weight: 500; color: var(--text); }
+        .ts-sub { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ts-sub.error { color: var(--danger); }
+        .ts-link { font-size: 12px; color: var(--accent); white-space: nowrap; }
+        .tools-summary:disabled .ts-link { display: none; }
+
+        /* Tools drawer */
+        .drawer-backdrop { position: fixed; inset: 0; z-index: 45; background: rgba(15, 17, 21, 0.25); }
+        .drawer {
+            position: fixed; top: 0; right: 0; bottom: 0; z-index: 50;
+            width: min(460px, 100vw);
+            display: flex; flex-direction: column;
+            background: var(--surface);
+            border-left: 1px solid var(--border);
+            box-shadow: -8px 0 24px rgba(16, 24, 40, 0.12);
+            animation: drawer-in 0.2s ease;
+        }
+        @keyframes drawer-in { from { transform: translateX(24px); opacity: 0; } }
+        .drawer-head {
+            display: flex; align-items: flex-start; gap: 12px;
+            padding: 16px 18px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        .drawer-head h2 { font-size: 16px; font-weight: 600; }
+        .drawer-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+        .drawer-head .icon-btn { margin-left: auto; }
+        .drawer-search { position: relative; padding: 12px 18px; border-bottom: 1px solid var(--border); }
+        .drawer-search i { position: absolute; left: 30px; top: 50%; transform: translateY(-50%); color: var(--text-dim); font-size: 13px; }
+        .drawer-search .input { padding-left: 34px; }
+        .drawer-body { flex: 1; overflow-y: auto; padding: 8px 18px 24px; }
+        .drawer-note {
+            font-size: 12px; color: var(--text-muted);
+            background: var(--surface-2); border-radius: var(--radius-sm);
+            padding: 9px 12px; margin: 10px 0 4px;
+        }
+        .drawer-note code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; }
+        .tool-group-title {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+            color: var(--text-dim);
+            margin: 18px 0 8px;
+        }
+        .tool-group-title .count { background: var(--surface-2); border-radius: 10px; padding: 0 7px; letter-spacing: 0; }
+        .tool-subtitle { font-size: 12px; font-weight: 500; color: var(--text-muted); margin: 12px 0 6px; }
+        .tool-card {
+            border: 1px solid var(--border); border-radius: var(--radius);
+            padding: 10px 12px; margin-bottom: 8px;
+            background: var(--surface);
+        }
+        .tool-card.off { background: var(--surface-2); }
+        .tool-card.off .tool-title { color: var(--text-muted); }
+        .tool-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .tool-title { font-weight: 600; font-size: 13.5px; }
+        .tag { font-size: 11px; font-weight: 500; border-radius: 10px; padding: 1px 8px; white-space: nowrap; }
+        .tag.write { background: var(--warning-soft); color: var(--warning); }
+        .tool-id { display: block; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--text-dim); margin-top: 1px; overflow-wrap: anywhere; }
+        .tool-desc {
+            font-size: 12.5px; color: var(--text-muted); margin-top: 6px;
+            white-space: pre-line; overflow-wrap: anywhere;
+            display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+            cursor: pointer;
+        }
+        .tool-desc.expanded { display: block; -webkit-line-clamp: unset; line-clamp: unset; }
+        .params { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+        .param {
+            font-family: 'JetBrains Mono', monospace; font-size: 11px;
+            border: 1px solid var(--border); border-radius: 5px; padding: 0 6px;
+            color: var(--text-muted); background: var(--surface);
+        }
+        .param.req { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--text); }
+        .param.req::after { content: '*'; color: var(--accent); margin-left: 1px; }
+        .param .ptype { color: var(--text-dim); }
+        .tools-empty { text-align: center; color: var(--text-dim); padding: 32px 0; font-size: 13px; }
 
         /* ---------- Main ---------- */
         .main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
@@ -328,7 +409,6 @@
         }
         .icon-btn:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
         .icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-        .menu-btn { display: none; }
 
         .chat-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; min-height: 0; }
         .chat-inner { max-width: 820px; width: 100%; min-width: 0; margin: 0 auto; padding: 24px 20px 12px; display: flex; flex-direction: column; gap: 20px; }
@@ -474,7 +554,6 @@
             .sidebar.open { transform: translateX(0); }
             .overlay { display: block; position: fixed; inset: 0; z-index: 30; background: rgba(0, 0, 0, 0.35); opacity: 0; pointer-events: none; transition: opacity 0.2s; }
             .overlay.active { opacity: 1; pointer-events: auto; }
-            .menu-btn { display: inline-flex; }
             .header { padding: 0 12px; }
             .model-chip, .btn-label { display: none; }
             .chat-inner { padding: 18px 14px 10px; }
@@ -543,18 +622,20 @@
                         </div>
                     </div>
                 </details>
-                <details class="panel" id="toolsPanel">
-                    <summary><i class="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i> Tools <span class="tool-count" id="toolCount">0</span> <i class="fa-solid fa-chevron-up chev" aria-hidden="true"></i></summary>
-                    <div class="panel-body">
-                        <div class="tools-list" id="toolsList"><div class="tools-note">Select an agent to load its tools.</div></div>
-                    </div>
-                </details>
+                <button type="button" class="tools-summary" id="toolsSummary" onclick="openToolsDrawer()" disabled aria-haspopup="dialog">
+                    <i class="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i>
+                    <span class="ts-text">
+                        <span class="ts-title">Tools</span>
+                        <span class="ts-sub" id="toolsSummaryText">Select an agent</span>
+                    </span>
+                    <span class="ts-link">View all <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span>
+                </button>
             </div>
         </aside>
 
         <main class="main">
             <header class="header">
-                <button class="icon-btn menu-btn" onclick="toggleSidebar()" aria-label="Open menu"><i class="fa-solid fa-bars" aria-hidden="true"></i></button>
+                <button class="icon-btn menu-btn" id="menuBtn" onclick="toggleMenu()" aria-controls="sidebar" aria-expanded="true" aria-label="Hide sidebar" title="Hide sidebar (Ctrl+B)"><i class="fa-solid fa-bars" aria-hidden="true"></i></button>
                 <div class="header-title">
                     <h1 id="agentTitle">Select an agent</h1>
                     <span class="status-pill" id="statusPill" hidden><span class="status-dot" id="statusDot"></span><span id="statusText"></span></span>
@@ -597,6 +678,24 @@
             </div>
         </main>
     </div>
+
+    <!-- Tools drawer -->
+    <div class="drawer-backdrop" id="toolsBackdrop" hidden onclick="closeToolsDrawer()"></div>
+    <aside class="drawer" id="toolsDrawer" role="dialog" aria-modal="true" aria-labelledby="toolsDrawerTitle" hidden>
+        <div class="drawer-head">
+            <div>
+                <h2 id="toolsDrawerTitle">Tools</h2>
+                <div class="drawer-sub" id="toolsDrawerSub"></div>
+            </div>
+            <button class="icon-btn" onclick="closeToolsDrawer()" aria-label="Close tools" title="Close (Esc)"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+        </div>
+        <div class="drawer-search">
+            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+            <label for="toolSearch" class="sr-only">Search tools</label>
+            <input id="toolSearch" class="input" type="search" placeholder="Search tools, descriptions, parameters…" autocomplete="off" oninput="renderToolsDrawer()">
+        </div>
+        <div class="drawer-body" id="toolsDrawerBody"></div>
+    </aside>
 
     <script>
         let configData = null;
@@ -721,6 +820,8 @@
         window.addEventListener('DOMContentLoaded', async () => {
             setupAutoResize();
             document.addEventListener('keydown', handleGlobalKeys);
+            updateMenuButton();
+            mobileQuery.addEventListener('change', () => { toggleSidebar(false); updateMenuButton(); });
             await fetchConfig();
             await refreshStatus();
             // ?agent=jira opens that agent directly (shareable link); otherwise the last one used
@@ -875,10 +976,40 @@
             const open = forceState !== undefined ? forceState : !sidebar.classList.contains('open');
             sidebar.classList.toggle('open', open);
             $('overlay').classList.toggle('active', open);
+            updateMenuButton();
+        }
+
+        const mobileQuery = matchMedia('(max-width: 860px)');
+
+        // Menu button: phones slide the sidebar over the chat (toggleSidebar);
+        // desktop hides/shows it and remembers the choice
+        function toggleMenu() {
+            if (mobileQuery.matches) {
+                toggleSidebar();
+                return;
+            }
+            const collapsed = document.documentElement.classList.toggle('sidebar-collapsed');
+            store('mcp.sidebar', collapsed ? 'collapsed' : 'open');
+            updateMenuButton();
+        }
+
+        function updateMenuButton() {
+            const open = mobileQuery.matches
+                ? $('sidebar').classList.contains('open')
+                : !document.documentElement.classList.contains('sidebar-collapsed');
+            const label = open ? 'Hide sidebar' : 'Show sidebar';
+            const btn = $('menuBtn');
+            btn.setAttribute('aria-expanded', String(open));
+            btn.setAttribute('aria-label', label);
+            btn.title = `${label} (Ctrl+B)`;
         }
 
         function handleGlobalKeys(e) {
-            if (e.key === 'Escape') toggleSidebar(false);
+            if (e.key === 'Escape' && !closeToolsDrawer()) toggleSidebar(false);
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+                e.preventDefault();
+                toggleMenu();
+            }
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
                 e.preventDefault();
                 newChat();
@@ -985,37 +1116,192 @@
         }
 
         // ---------- Tools ----------
+        // { agent, enabled: [...], all: [...], error } for the tools drawer
+        let toolsData = null;
+
+        function setToolsSummary(text, isError = false, clickable = false) {
+            const sub = $('toolsSummaryText');
+            sub.textContent = text;
+            sub.className = 'ts-sub' + (isError ? ' error' : '');
+            sub.title = text;
+            $('toolsSummary').disabled = !clickable;
+        }
+
         async function initializeOrFetchTools() {
             if (!activeAgentName) return;
-            const toolsList = $('toolsList');
-            toolsList.innerHTML = '';
-            toolsList.appendChild(el('div', 'tools-note', 'Connecting and loading tools…'));
-            agentStatus[activeAgentName] = { state: 'connecting', message: 'Loading tools…' };
+            const agent = activeAgentName;
+            setToolsSummary('Loading tools…');
+            agentStatus[agent] = { state: 'connecting', message: 'Loading tools…' };
             renderHeaderStatus();
             renderAgentList();
 
             try {
-                const res = await fetch(`/api/agent/${encodeURIComponent(activeAgentName)}/tools`, {
+                const res = await fetch(`/api/agent/${encodeURIComponent(agent)}/tools`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(llmSettings())
                 });
                 if (!res.ok) throw new Error(await errorDetail(res));
-                const tools = (await res.json()).tools || [];
-                $('toolCount').textContent = tools.length;
-                toolsList.innerHTML = '';
-                if (!tools.length) toolsList.appendChild(el('div', 'tools-note', 'No tools found.'));
-                tools.forEach(t => {
-                    const row = el('div', 'tool-row', t.name);
-                    row.title = t.description || 'No description available';
-                    toolsList.appendChild(row);
-                });
+                const data = await res.json();
+                const enabled = data.tools || [];
+                const all = data.all_tools && data.all_tools.length ? data.all_tools : enabled;
+                toolsData = { agent, enabled, all };
+                setToolsSummary(enabled.length < all.length
+                    ? `${enabled.length} of ${all.length} enabled`
+                    : plural(all.length, 'tool'), false, true);
             } catch (err) {
-                $('toolCount').textContent = '0';
-                toolsList.innerHTML = '';
-                toolsList.appendChild(el('div', 'tools-note error', err.message || 'Could not connect. Check the credentials.'));
+                toolsData = { agent, enabled: [], all: [], error: err.message };
+                setToolsSummary(err.message || 'Could not connect', true, true);
             }
+            if (!$('toolsDrawer').hidden) renderToolsDrawer();
             await refreshStatus();
+        }
+
+        // ---------- Tools drawer ----------
+        const AGENT_TOOL_PREFIXES = /^(jira|slack|git|github|tg)_/;
+        const READ_VERBS = new Set(['get', 'search', 'list', 'fetch', 'read', 'find', 'download', 'history', 'replies', 'unreads', 'me', 'query']);
+        const WRITE_VERBS = new Set(['add', 'create', 'update', 'delete', 'remove', 'send', 'post', 'assign', 'transition',
+            'comment', 'write', 'edit', 'move', 'link', 'join', 'leave', 'mark', 'clear', 'merge', 'push', 'fork', 'close', 'batch']);
+
+        function friendlyToolName(name) {
+            const words = name.replace(AGENT_TOOL_PREFIXES, '').split('_').filter(Boolean);
+            const text = words.join(' ');
+            return text.charAt(0).toUpperCase() + text.slice(1);
+        }
+
+        // Classified by the first verb in the name, e.g. jira_get_link_types → read,
+        // conversations_add_message → write; names without a verb count as read
+        function isWriteTool(name) {
+            for (const word of name.replace(AGENT_TOOL_PREFIXES, '').split('_')) {
+                if (READ_VERBS.has(word)) return false;
+                if (WRITE_VERBS.has(word)) return true;
+            }
+            return false;
+        }
+
+        function openToolsDrawer() {
+            if (!toolsData) return;
+            $('toolSearch').value = '';
+            $('toolsDrawer').hidden = false;
+            $('toolsBackdrop').hidden = false;
+            renderToolsDrawer();
+            $('toolSearch').focus();
+        }
+
+        function closeToolsDrawer() {
+            if ($('toolsDrawer').hidden) return false;
+            $('toolsDrawer').hidden = true;
+            $('toolsBackdrop').hidden = true;
+            $('toolsSummary').focus();
+            return true;
+        }
+
+        function toolMatches(tool, query) {
+            if (!query) return true;
+            const haystack = [tool.original_name, friendlyToolName(tool.original_name), tool.description,
+                ...(tool.parameters || []).map(p => p.name)].join(' ').toLowerCase();
+            return query.split(/\s+/).every(term => haystack.includes(term));
+        }
+
+        function toolCard(tool, enabled) {
+            const card = el('div', 'tool-card' + (enabled ? '' : ' off'));
+            const head = el('div', 'tool-head');
+            head.appendChild(el('span', 'tool-title', friendlyToolName(tool.original_name)));
+            if (isWriteTool(tool.original_name)) {
+                const tag = el('span', 'tag write', 'Changes data');
+                tag.title = 'This tool can create, change or delete data';
+                head.appendChild(tag);
+            }
+            card.append(head, el('code', 'tool-id', tool.original_name));
+
+            const description = (tool.description || '').trim();
+            if (description) {
+                // Collapsed: the first paragraph (MCP descriptions often continue with
+                // "Args:" sections); clicking shows the full text
+                const summary = description.split(/\n\s*\n/)[0].replace(/\s+/g, ' ');
+                const hasMore = summary.length < description.replace(/\s+/g, ' ').length;
+                const desc = el('p', 'tool-desc', summary);
+                if (hasMore) {
+                    desc.title = 'Click to show the full description';
+                    desc.onclick = () => {
+                        const expand = !desc.classList.contains('expanded');
+                        desc.classList.toggle('expanded', expand);
+                        desc.textContent = expand ? description : summary;
+                    };
+                } else {
+                    desc.style.cursor = 'default';
+                }
+                card.appendChild(desc);
+            }
+            const params = tool.parameters || [];
+            if (params.length) {
+                const row = el('div', 'params');
+                params.slice().sort((a, b) => (b.required - a.required)).forEach(p => {
+                    const chip = el('span', 'param' + (p.required ? ' req' : ''), p.name);
+                    chip.title = (p.required ? 'Required' : 'Optional') + (p.type ? ` · ${p.type}` : '');
+                    row.appendChild(chip);
+                });
+                card.appendChild(row);
+            }
+            return card;
+        }
+
+        function appendToolGroup(container, title, tools, enabled) {
+            if (!tools.length) return;
+            const heading = el('div', 'tool-group-title', title);
+            heading.appendChild(el('span', 'count', String(tools.length)));
+            container.appendChild(heading);
+            const reads = tools.filter(t => !isWriteTool(t.original_name));
+            const writes = tools.filter(t => isWriteTool(t.original_name));
+            [['Read', reads], ['Write', writes]].forEach(([label, list]) => {
+                if (!list.length) return;
+                if (reads.length && writes.length) container.appendChild(el('div', 'tool-subtitle', `${label} · ${list.length}`));
+                list.forEach(t => container.appendChild(toolCard(t, enabled)));
+            });
+        }
+
+        function renderToolsDrawer() {
+            const body = $('toolsDrawerBody');
+            body.innerHTML = '';
+            if (!toolsData) return;
+            const name = agentLabel(toolsData.agent);
+            $('toolsDrawerTitle').textContent = `${name} tools`;
+
+            if (toolsData.error) {
+                $('toolsDrawerSub').textContent = 'Not connected';
+                const box = el('div', 'alert');
+                box.append(icon('fa-solid fa-circle-exclamation'), el('div', 'alert-text', toolsData.error));
+                body.appendChild(box);
+                return;
+            }
+
+            const enabledNames = new Set(toolsData.enabled.map(t => t.original_name));
+            const filtered = toolsData.enabled.length < toolsData.all.length;
+            $('toolsDrawerSub').textContent = filtered
+                ? `${toolsData.enabled.length} of ${toolsData.all.length} tools enabled for this model`
+                : `${plural(toolsData.all.length, 'tool')} available`;
+
+            const query = $('toolSearch').value.trim().toLowerCase();
+            const matching = toolsData.all.filter(t => toolMatches(t, query));
+            if (!matching.length) {
+                body.appendChild(el('div', 'tools-empty', query ? `No tools match “${query}”.` : 'This agent has no tools.'));
+                return;
+            }
+
+            if (filtered) {
+                const note = el('div', 'drawer-note');
+                note.append(document.createTextNode('Local models only get a few tools, to keep prompts small and fast. '));
+                if (!toolsData.agent.includes('-')) {
+                    note.append(document.createTextNode('To enable more, list them in '),
+                        el('code', '', `${toolsData.agent.toUpperCase()}_ENABLED_TOOLS`),
+                        document.createTextNode(' in .env.'));
+                }
+                body.appendChild(note);
+                appendToolGroup(body, 'Enabled for this model', matching.filter(t => enabledNames.has(t.original_name)), true);
+                appendToolGroup(body, 'Other available tools', matching.filter(t => !enabledNames.has(t.original_name)), false);
+            } else {
+                appendToolGroup(body, 'Available tools', matching, true);
+            }
         }
 
         async function errorDetail(res) {

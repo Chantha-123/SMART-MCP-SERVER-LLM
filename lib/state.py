@@ -140,6 +140,7 @@ class RuntimeState:
         self.chat_sessions: dict[str, list[BaseMessage]] = {}
         self.session_metadata: dict[str, dict[str, Any]] = {}
         self.tool_summaries: list[dict[str, object]] = []
+        self.all_tool_summaries: list[dict[str, object]] = []
         self.tool_map: dict[str, Any] = {}
         self.tool_details: dict[str, dict[str, Any]] = {}
         self.persistence_enabled: bool = not _persistence_disabled()

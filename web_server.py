@@ -230,7 +230,14 @@ async def get_agent_tools(agent_name: str, req: ToolQueryRequest):
         _set_status(agent_name, "error", format_init_error(e))
         raise HTTPException(status_code=500, detail=f"Failed to load agent tools: {format_init_error(e)}")
     _set_status(agent_name, "ready", "Connected", tools=len(agent_wrapper.state.tool_summaries))
-    return {"tools": agent_wrapper.state.tool_summaries}
+    state = agent_wrapper.state
+    return {
+        # Tools the current model can use (local models get a filtered subset)
+        "tools": state.tool_summaries,
+        # Everything the MCP server offers, for the dashboard's tools drawer
+        "all_tools": state.all_tool_summaries,
+        "total": len(state.all_tool_summaries),
+    }
 
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):

@@ -591,6 +591,32 @@ def _strip_tool_prefix(name: str) -> str:
     return name
 
 
+def _tool_args_schema(tool: Any) -> dict[str, Any]:
+    args_schema = schema_from_model(getattr(tool, "args_schema", None))
+    if not isinstance(args_schema, dict) or "properties" not in args_schema:
+        tool_args = getattr(tool, "args", None)
+        if isinstance(tool_args, dict):
+            args_schema = {"properties": tool_args}
+    return args_schema or {}
+
+
+def _tool_summary(tool: Any, args_schema: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Name, description and parameters of a tool, for display in the dashboard."""
+    schema = args_schema if args_schema is not None else _tool_args_schema(tool)
+    properties = schema.get("properties") if isinstance(schema, dict) else None
+    required = set(schema.get("required") or []) if isinstance(schema, dict) else set()
+    parameters = [
+        {"name": name, "type": get_schema_type(prop) or "", "required": name in required}
+        for name, prop in (properties or {}).items()
+    ]
+    return {
+        "name": sanitize_tool_name(tool.name),
+        "original_name": tool.name,
+        "description": getattr(tool, "description", "") or "",
+        "parameters": parameters,
+    }
+
+
 def _matches_tool_name(tool_name: str, enabled_names: set[str]) -> bool:
     low = tool_name.lower()
     san = sanitize_tool_name(low)
@@ -760,17 +786,15 @@ class BaseAgent:
         state.tool_summaries = []
         state.tool_map = {}
         state.tool_details = {}
-        
+        # Every tool the server offers (also the ones filtered out above), for the dashboard
+        state.all_tool_summaries = [_tool_summary(tool) for tool in state.mcp_tools]
+
         wrapped_tools = []
         for tool in tools:
             original_name = tool.name
             sanitized_name = sanitize_tool_name(original_name)
-            
-            args_schema = schema_from_model(getattr(tool, "args_schema", None))
-            if not isinstance(args_schema, dict) or "properties" not in args_schema:
-                tool_args = getattr(tool, "args", None)
-                if isinstance(tool_args, dict):
-                    args_schema = {"properties": tool_args}
+
+            args_schema = _tool_args_schema(tool)
             metadata = getattr(tool, "metadata", {}) or {}
             
             # Wrap the tool in SanitizedTool to handle model parameter hallucinations (like sort enums on Groq)
@@ -785,13 +809,7 @@ class BaseAgent:
                 "metadata": metadata,
                 "args_schema": args_schema,
             }
-            state.tool_summaries.append(
-                {
-                    "name": sanitized_name,
-                    "original_name": original_name,
-                    "description": getattr(tool, "description", ""),
-                }
-            )
+            state.tool_summaries.append(_tool_summary(tool, args_schema))
         tools = wrapped_tools
         
         # Get LLM and create agent with tools
